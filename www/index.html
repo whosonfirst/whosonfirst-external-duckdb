@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>duckdb-wasm-local example</title>
+    <link rel="stylesheet" type="text/css" href="css/leaflet.css" />
+    <style type="text/css">
+     #feedback {
+	     margin-bottom: 1rem;
+	     font-style:italic;
+     }
+
+     .grid-view {
+	     display: grid;
+	     grid-template-columns:1fr 1fr;
+	     gap: 50px 10px;
+     }
+     
+     #results {
+	     max-height: 80vh;
+	     overflow:scroll;
+     }
+
+     #map {
+	     width: 100%;
+	     height: 100vh;
+     }
+     
+    </style>
+  </head>
+  <body>
+      <div id="feedback">Loading DuckDB</div>
+      <div class="grid-view">
+	  <div id="map"></div>	  
+	  <div>
+	      <input type="text" id="q" value="" placeholder="" />
+	      <button id="submit" type="submit" disabled="disabled">Search</button>
+	      <div id="results">
+	      </div>
+	  </div>
+      </div>
+
+      <script type="text/javascript" src="javascript/leaflet.js"></script>
+      
+      <script>
+
+	 var input = document.getElementById("q");
+	 input.value = "";
+       
+       const getDb = async () => {
+           const duckdb = window.duckdbduckdbWasm;
+           // @ts-ignore
+           if (window._db) return window._db;
+	   
+           const JSDELIVR_BUNDLES = duckdb.getJsDelivrBundles();
+	   
+           // Select a bundle based on browser checks
+           const bundle = await duckdb.selectBundle(JSDELIVR_BUNDLES);
+	   
+           const worker_url = URL.createObjectURL(
+               new Blob([`importScripts("${bundle.mainWorker}");`], {
+		   type: "text/javascript",
+               })
+           );
+	   
+           // Instantiate the asynchronus version of DuckDB-wasm
+           const worker = new Worker(worker_url);
+           // const logger = null //new duckdb.ConsoleLogger();
+           const logger = new duckdb.ConsoleLogger();
+           const db = new duckdb.AsyncDuckDB(logger, worker);
+           await db.instantiate(bundle.mainModule, bundle.pthreadWorker);
+           URL.revokeObjectURL(worker_url);
+           window._db = db;
+           return db;
+       };
+      </script>
+      
+      <script type="module">
+       // import * as duckdbduckdbWasm from "https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.28.1-dev106.0/+esm";
+       import * as duckdbduckdbWasm from "./duckdb-wasm-local/duckdb-wasm.js"
+       
+       window.duckdbduckdbWasm = duckdbduckdbWasm;
+       
+       var fb = document.getElementById("feedback");
+       
+       getDb().then(async (db) => {
+
+	   // en-CA is important in order to get YYYY-MM-dd formatting. Go, Canada!
+	   const dt_formatter = new Intl.DateTimeFormat('en-CA', {
+	       year: 'numeric',
+	       month: '2-digit',
+	       day: '2-digit',
+	       timeZone: 'America/Los_Angeles',		    
+	   });	   
+
+	   const num_formatter = new Intl.NumberFormat();
+	   
+	   fb.innerText = "Connecting to database";
+	   
+           const conn = await db.connect();
+
+	   fb.innerText = "Setting up map";
+
+	   var map;
+	   var base_layer;
+	   var markers_layer;
+	   
+	   // Apparently ST_Extent_Agg is not available in duckdb-wasm
+	   // await conn.query("LOAD spatial");
+	   // const extent_r = await conn.query("SELECT ST_Extent_Agg(geom) FROM (SELECT ST_GeomFromWKB(geom) FROM read_parquet('http://localhost:8080/data/sfba.parquet')) AS _(geom)");
+
+	   /*
+
+	   Error: Catalog Error: Scalar Function with name st_extent_agg does not exist!
+	   Did you mean "ST_Extent"?
+	   LINE 1: SELECT ST_Extent_Agg(geom) FROM (SELECT ST_Geo...
+           */
+	   
+	   var min_x;
+	   var min_y;
+	   var max_x;
+	   var max_y;
+	   
+	   try {
+	       const minx_r = await conn.query("SELECT longitude FROM read_parquet('http://localhost:8080/data/sfba.parquet') ORDER by longitude ASC LIMIT 1");
+	       const miny_r = await conn.query("SELECT latitude FROM read_parquet('http://localhost:8080/data/sfba.parquet') ORDER by latitude ASC LIMIT 1");
+	       const maxx_r = await conn.query("SELECT longitude FROM read_parquet('http://localhost:8080/data/sfba.parquet') ORDER by longitude DESC LIMIT 1");
+	       const maxy_r = await conn.query("SELECT latitude FROM read_parquet('http://localhost:8080/data/sfba.parquet') ORDER by latitude DESC LIMIT 1");	   
+	       
+	       min_x = minx_r.toArray()[0].longitude;
+	       min_y = miny_r.toArray()[0].latitude;
+	       max_x = maxx_r.toArray()[0].longitude;
+	       max_y = maxy_r.toArray()[0].latitude;
+	       
+	   } catch(err) {
+	       fb.innerText = "Failed to derive extent, " + err;
+	       console.error(err);	       
+	       return;
+	   }
+
+	   var bounds = [
+	       [ min_y, min_x ],
+	       [ max_y, max_x ],
+	   ];
+
+	   map = L.map('map');
+	   map.fitBounds(bounds);
+	   
+	   base_layer = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+	       maxZoom: 19,
+	   });
+
+	   base_layer.addTo(map);
+	   
+	   console.log(min_x, min_y, max_x, max_y);
+	   
+	   fb.innerText = "Setting up search table";
+	   
+	   await conn.query("CREATE TABLE search AS SELECT fsq_place_id AS id, name, address FROM read_parquet('http://localhost:8080/data/sfba.parquet')");
+
+	   fb.innerText = "Setting up database PRAGMA";	   
+	   
+	   await conn.query("PRAGMA create_fts_index('search', 'id', 'name', 'address')");
+	   
+	   fb.innerText = "Ready to search";
+
+	   var input = document.getElementById("q");
+	   
+	   var b = document.getElementById("submit");
+	   b.removeAttribute("disabled");
+	   
+	   b.onclick = async function(e){
+
+	       if (markers_layer){
+		   map.removeLayer(markers_layer);
+	       }
+	       
+	       var q = input.value;
+	       
+	       var html_results = document.getElementById("results");
+	       html_results.innerText = "";
+	       
+	       fb.innerText = "Performing search";
+	       
+	       const ids_results = await conn.query("SELECT fts_main_search.match_bm25(id, '" + q + "') AS score, id FROM search WHERE score IS NOT NULL ORDER BY score DESC");
+
+	       var ids_count = ids_results.toArray().length;
+
+	       if (! ids_count){
+		   fb.innerText = "No results found. Ready to search";
+		   return false;
+	       }
+
+	       var ids_list = [];
+	       
+	       for (const row of ids_results) {
+		   ids_list.push("'" + row.id + "'");
+               }
+
+	       const search_results = await conn.query("SELECT fsq_place_id AS id, name, address, locality, JSON(fsq_category_labels) AS categories, latitude, longitude FROM read_parquet('http://localhost:8080/data/sfba.parquet') WHERE fsq_place_id IN ( " + ids_list.join(",") + ") AND date_closed IS NULL");
+
+	       var count_results = search_results.toArray().length;
+	       
+	       var html_list = document.createElement("ul");
+
+	       switch (count_results) {
+		   case 1:
+		       fb.innerText = "Compiling only result";
+		       break;
+		   default:
+		       fb.innerText = "Compiling " + count_results + " results";
+		       break;
+	       }
+
+	       var features = [];
+	       
+	       for (const row of search_results) {
+
+		   var props = {
+		       'id': row.id,
+		       'name': row.name,
+		       'address': row.address,
+		       'locality': row.locality,
+		       'categories': JSON.parse(row.categories),
+		   };
+		   
+		   var geom = {
+		       'type': 'Point',
+		       'coordinates': [ row.longitude, row.latitude ],
+		   };
+
+		   var f = {
+		       'type': 'Feature',
+		       'geometry': geom,
+		       'properties': props,
+		   }
+
+		   features.push(f);
+
+		   var item = document.createElement("li");
+
+		   item.appendChild(document.createTextNode(row.name));
+		   item.appendChild(document.createElement("br"));
+		   item.appendChild(document.createTextNode(row.address + ", " + row.locality));
+		   item.appendChild(document.createElement("br"));
+
+		   if (row.categories){
+		       item.appendChild(document.createTextNode(row.categories));
+		   }
+		   
+		   html_list.appendChild(item);
+               }
+
+	       var markers_style = {
+		   radius: 8,
+		   fillColor: "#ff7800",
+		   color: "#000",
+		   weight: 1,
+		   opacity: 1,
+		   fillOpacity: 0.8
+	       };
+
+	       var markers_opts = {
+		   pointToLayer: function (feature, latlng) {
+		       return L.circleMarker(latlng, markers_style);
+		   }
+	       };
+	       
+	       markers_layer = L.geoJSON(features, markers_opts);
+	       markers_layer.addTo(map);
+	       
+	       
+	       html_results.appendChild(html_list);
+	       
+	       switch (count_results){
+		   case 1:
+		       fb.innerText = "Ready to search again.";
+		       break;
+		   default:		       
+		       fb.innerText = num_formatter.format(count_results) + " results. Ready to search again.";
+		       break;
+	       }
+	       
+	       return false;
+	   };
+	   
+       }).catch((err) => {
+	   var fb = document.getElementById("feedback");
+	   fb.innerText = "Failed to configure DuckDB: " + err;
+	   console.error("Failed to configure DuckDB", err);
+       });
+       
+    </script>
+  </body>
+</html>
