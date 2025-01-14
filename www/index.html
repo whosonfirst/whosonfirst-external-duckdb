@@ -42,6 +42,7 @@
       </div>
 
       <script type="text/javascript" src="javascript/leaflet.js"></script>
+      <script type="text/javascript" src="javascript/protomaps-leaflet.js"></script>      
       
       <script>
 
@@ -146,11 +147,20 @@
 
 	   map = L.map('map');
 	   map.fitBounds(bounds);
-	   
+
+	   /*
 	   base_layer = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
 	       maxZoom: 19,
 	   });
-
+	   */
+	   
+	   base_layer = protomapsL.leafletLayer({
+	       url:'http://localhost:8080/pmtiles/sfba.pmtiles',
+	       // go run main.go serve /usr/local/whosonfirst/whosonfirst-external-duckdb/www/pmtiles --port=8081 --cors="*"
+	       // url:'http://localhost:8081/sfba/{z}/{x}/{y}.mvt',	       
+	       theme:"white"
+	   });
+	   
 	   base_layer.addTo(map);
 	   
 	   console.log(min_x, min_y, max_x, max_y);
