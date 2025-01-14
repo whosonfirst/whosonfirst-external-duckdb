@@ -1,8 +1,12 @@
 # whosonfirst-external-duckdb
 
+## This is work in progress
+
+Documentation is incomplete.
+
 ## Notes
 
-* All `.wasm` and `.parquet` files are tracked and stored using git lfs.
+* All `.wasm`, `.parquet` and `.pmtiles` files are tracked and stored using git lfs.
 
 ## www
 
