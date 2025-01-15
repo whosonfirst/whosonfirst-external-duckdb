@@ -79,9 +79,9 @@ $> ./bin/fileserver -root /usr/local/src/whosonfirst-external-duckdb/www/
 
 Open your web browser to `http://localhost:8080` and you'll see something like this:
 
-![](images/whosonfirst-external-duckdb-pmtiles.png)
+![](../docs/images/whosonfirst-external-duckdb-pmtiles.png)
 
-![](images/whosonfirst-external-duckdb-daeho.png)
+![](../docs/images/whosonfirst-external-duckdb-daeho.png)
 
 ## See also
 
