@@ -35,6 +35,7 @@
 	  <div id="map"></div>	  
 	  <div>
 	      <input type="text" id="q" value="" placeholder="" />
+	      <select id="locality"></select>
 	      <button id="submit" type="submit" disabled="disabled">Search</button>
 	      <div id="results">
 	      </div>
@@ -43,39 +44,7 @@
 
       <script type="text/javascript" src="javascript/leaflet.js"></script>
       <script type="text/javascript" src="javascript/protomaps-leaflet.js"></script>      
-      
-      <script>
-
-	 var input = document.getElementById("q");
-	 input.value = "";
-       
-       const getDb = async () => {
-           const duckdb = window.duckdbduckdbWasm;
-           // @ts-ignore
-           if (window._db) return window._db;
-	   
-           const JSDELIVR_BUNDLES = duckdb.getJsDelivrBundles();
-	   
-           // Select a bundle based on browser checks
-           const bundle = await duckdb.selectBundle(JSDELIVR_BUNDLES);
-	   
-           const worker_url = URL.createObjectURL(
-               new Blob([`importScripts("${bundle.mainWorker}");`], {
-		   type: "text/javascript",
-               })
-           );
-	   
-           // Instantiate the asynchronus version of DuckDB-wasm
-           const worker = new Worker(worker_url);
-           // const logger = null //new duckdb.ConsoleLogger();
-           const logger = new duckdb.ConsoleLogger();
-           const db = new duckdb.AsyncDuckDB(logger, worker);
-           await db.instantiate(bundle.mainModule, bundle.pthreadWorker);
-           URL.revokeObjectURL(worker_url);
-           window._db = db;
-           return db;
-       };
-      </script>
+      <script type="text/javascript" src="javascript/init.js"></script>
       
       <script type="module">
        // import * as duckdbduckdbWasm from "https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.28.1-dev106.0/+esm";
@@ -162,12 +131,116 @@
 	   });
 	   
 	   base_layer.addTo(map);
+
+	   // 
+
+	   fb.innerText = "Setting up localities";
+
+	   // Note: It is not really useful to use SELECT DISTINCT(locality) FROM read_parquet('sfba.parquet') ORDER BY locality ASC;
+	   // because it just returns garbage and gibberish.
 	   
-	   console.log(min_x, min_y, max_x, max_y);
+	   // Wut: The first query triggers the following error:
+	   // DuckDB: Error: Binder Error: Cannot extract field 'locality_id' from expression "array_extract(CAST(json_extract(wof:hierarchies, '$') AS VARCHAR), CAST(0 AS BIGINT))" because it is not a struct or a union
+	   // const locality_results = await conn.query("SELECT DISTINCT(JSON(\"wof:hierarchies\")[0].locality_id) FROM read_parquet('http://localhost:8080/data/sfba.parquet')");
+
+	   // This however works...
+	   const locality_results = await conn.query("SELECT DISTINCT(JSON_EXTRACT_STRING(\"wof:hierarchies\", '$[0].locality_id')) AS locality_id FROM read_parquet('http://localhost:8080/data/sfba.parquet')");
+	   
+	   var locality_names = {};
+	   var locality_count = 0;
+
+	   var draw_localities = function() {
+	       // console.log("DRAW", locality_names);
+
+	       var lookup = {};
+	       var names = [];
+
+	       for (var id in locality_names){
+
+		   var name = locality_names[id];
+
+		   if(names.indexOf(names) == -1){
+		       names.push(name);
+		   }
+		       
+		   var ids = lookup[name];
+
+		   if (!ids){
+		       ids = [];
+		   }
+
+		   ids.push(id);
+		   lookup[name] = ids;
+	       }
+
+	       names.sort()
+
+	       var sel = document.getElementById("locality");
+
+	       var opt = document.createElement("option");
+	       opt.setAttribute("value", "-1");
+	       opt.appendChild(document.createTextNode(""));
+	       
+	       sel.appendChild(opt);
+
+	       for (var i in names){
+
+		   var name = names[i];
+		   var ids = lookup[name];
+
+		   for (var j in ids){
+
+		       var id = ids[j];
+
+		       var opt = document.createElement("option");
+		       opt.setAttribute("value", id);
+		       opt.appendChild(document.createTextNode(name));
+
+		       sel.appendChild(opt);
+		   }
+	       }
+	       
+	   };
+	   
+	   for (const row of locality_results) {
+	       locality_count += 1;
+
+	       const locality_url = "https://data.whosonfirst.org/geojson/" + row.locality_id;
+	       console.log("Fetch", locality_url);
+	       
+	       fetch(locality_url)
+		   .then((response) => response.json())
+		   .then((data) => {
+
+		       const id = data.properties["wof:id"];
+		       const name = data.properties["wof:name"];
+
+		       locality_names[id] = name;
+
+		       locality_count -=1;
+
+		       if (locality_count == 0){
+			   draw_localities();
+		       }
+		       
+		   }).catch((err) => {
+
+		       locality_count -=1;
+
+		       console.log("SAD", err, locality_count);
+		       
+		       if (locality_count == 0){
+			   draw_localities();			   
+		       }
+		       
+		   });
+	   }
+	   
+	   //
 	   
 	   fb.innerText = "Setting up search table";
 	   
-	   await conn.query("CREATE TABLE search AS SELECT fsq_place_id AS id, name, address FROM read_parquet('http://localhost:8080/data/sfba.parquet')");
+	   await conn.query("CREATE TABLE search AS SELECT fsq_place_id AS id, name, address, JSON_EXTRACT(\"wof:hierarchies\", '$[0].locality_id') AS locality_id FROM read_parquet('http://localhost:8080/data/sfba.parquet')");
 
 	   fb.innerText = "Setting up database PRAGMA";	   
 	   
@@ -176,6 +249,7 @@
 	   fb.innerText = "Ready to search";
 
 	   var input = document.getElementById("q");
+	   var locality = document.getElementById("locality");	   
 	   
 	   var b = document.getElementById("submit");
 	   b.removeAttribute("disabled");
@@ -187,13 +261,24 @@
 	       }
 	       
 	       var q = input.value;
+	       var locality_id = parseInt(locality.value);
 	       
 	       var html_results = document.getElementById("results");
 	       html_results.innerText = "";
 	       
 	       fb.innerText = "Performing search";
-	       
-	       const ids_results = await conn.query("SELECT fts_main_search.match_bm25(id, '" + q + "') AS score, id FROM search WHERE score IS NOT NULL ORDER BY score DESC");
+
+	       var where = [
+		   "score IS NOT NULL",
+	       ];
+
+	       if ((locality_id != NaN) && (locality_id != -1)){
+		   where.push("locality_id = " + locality_id);
+	       }
+		       
+	       const str_where = where.join(" AND ");
+
+	       const ids_results = await conn.query("SELECT fts_main_search.match_bm25(id, '" + q + "') AS score, id FROM search WHERE " + str_where + " ORDER BY score DESC");
 
 	       var ids_count = ids_results.toArray().length;
 
