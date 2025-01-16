@@ -36,6 +36,7 @@
 	  <div>
 	      <input type="text" id="q" value="" placeholder="" />
 	      <select id="locality"></select>
+	      <select id="neighbourhood"></select>	      
 	      <button id="submit" type="submit" disabled="disabled">Search</button>
 	      <div id="results">
 	      </div>
@@ -199,7 +200,123 @@
 		       sel.appendChild(opt);
 		   }
 	       }
+
+	       var neighbourhoods = async function(locality_id) {
+
+		   var sel = document.getElementById("neighbourhood");
+		   sel.innerHTML = "";
+		   
+		   if (locality_id == -1){
+		       return;
+		   }
+
+		   var neighbourhood_names = {};
+		   var neighbourhood_count = 0;
+
+		   var draw_neighbourhoods = function() {
+
+		       var lookup = {};
+		       var names = [];
+		       
+		       for (var id in neighbourhood_names){
+
+			   var name = neighbourhood_names[id];
+			   
+			   if(names.indexOf(names) == -1){
+			       names.push(name);
+			   }
+			   
+			   var ids = lookup[name];
+			   
+			   if (!ids){
+			       ids = [];
+			   }
+			   
+			   ids.push(id);
+			   lookup[name] = ids;
+		       }
+		       
+		       names.sort()
+		       
+		       var sel = document.getElementById("neighbourhood");
+		       
+		       var opt = document.createElement("option");
+		       opt.setAttribute("value", "-1");
+		       opt.appendChild(document.createTextNode(""));
+		       
+		       sel.appendChild(opt);
+		       
+		       for (var i in names){
+			   
+			   var name = names[i];
+			   var ids = lookup[name];
+			   
+			   for (var j in ids){
+			       
+			       var id = ids[j];
+			       
+			       var opt = document.createElement("option");
+			       opt.setAttribute("value", id);
+			       opt.appendChild(document.createTextNode(name));
+			       
+			       sel.appendChild(opt);
+			   }
+		       }
+		   };
+		   
+		   const neighbourhood_results = await conn.query("SELECT DISTINCT(JSON_EXTRACT_STRING(\"wof:hierarchies\", '$[0].neighbourhood_id')) AS neighbourhood_id FROM read_parquet('http://localhost:8080/data/sfba.parquet') WHERE JSON_EXTRACT(\"wof:hierarchies\", '$[0].locality_id') = '" + locality_id + "'");
+
+		   for (const row of neighbourhood_results) {
+
+		       if (! row.neighbourhood_id){
+			   continue;
+		       }
+		       
+		       neighbourhood_count += 1;
+
+		       console.log("WTF", row.neighbourhood_id)
+		       const neighbourhood_url = "https://data.whosonfirst.org/geojson/" + row.neighbourhood_id;
+		       console.log("Fetch", neighbourhood_url);
+		       // continue;
+		       
+		       fetch(neighbourhood_url)
+			   .then((response) => response.json())
+			   .then((data) => {
+
+			       const id = data.properties["wof:id"];
+			       const name = data.properties["wof:name"];
+
+			       console.log("WUT", id, name);
+			       neighbourhood_names[id] = name;
+			       
+			       neighbourhood_count -=1;
+			       
+			       if (neighbourhood_count == 0){
+				   draw_neighbourhoods();
+			       }
+			       
+			   }).catch((err) => {
+			       
+			       neighbourhood_count -=1;
+			       
+			       console.log("SAD", err, neighbourhood_count);
+			       
+			       if (neighbourhood_count == 0){
+				   draw_neighbourhoods();			   
+			       }
+			       
+			   });
+		   }
+		   
+	       };
 	       
+	       sel.onchange = function(e){
+		   var el = e.target;
+		   var locality_id = el.value;
+
+		   neighbourhoods(locality_id);
+		   return false;
+	       };
 	   };
 	   
 	   for (const row of locality_results) {
@@ -240,11 +357,11 @@
 	   
 	   fb.innerText = "Setting up search table";
 	   
-	   await conn.query("CREATE TABLE search AS SELECT fsq_place_id AS id, name, address, JSON_EXTRACT(\"wof:hierarchies\", '$[0].locality_id') AS locality_id FROM read_parquet('http://localhost:8080/data/sfba.parquet')");
+	   await conn.query("CREATE TABLE search AS SELECT fsq_place_id AS id, name, address, JSON_EXTRACT(\"wof:hierarchies\", '$[0].locality_id') AS locality_id, JSON_EXTRACT(\"wof:hierarchies\", '$[0].neighbourhood_id') AS neighbourhood_id FROM read_parquet('http://localhost:8080/data/sfba.parquet')");
 
 	   fb.innerText = "Setting up database PRAGMA";	   
 	   
-	   await conn.query("PRAGMA create_fts_index('search', 'id', 'name', 'address')");
+	   await conn.query("PRAGMA create_fts_index('search', 'id', 'name', 'address', 'locality_id', 'neighbourhood_id')");
 	   
 	   fb.innerText = "Ready to search";
 
