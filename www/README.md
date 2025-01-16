@@ -65,6 +65,16 @@ pgf:devanagari:name NotoSansDevanagari-Regular
 pgf:devanagari:version 1
 ```
 
+### Who's On First properties (names)
+
+Create a properties lookup table (currently just for place names for localities and neighbourhoods) derived from the `sfba.parquet` table derived from the [global Who's On First distribution](https://geocode.earth/data/whosonfirst/combined/) produced by Geocode Earth.
+
+_Note: This is a fantastically inefficient query. It could be made better in so many ways not least of which would simply be looping over all the records in `sfba.parquet` manually and doing individual `SELECT` queries. For the time being it is what it is._
+
+```
+D COPY (SELECT g.id, g.name FROM read_parquet('https://data.geocode.earth/wof/dist/parquet/whosonfirst-data-admin-latest.parquet') g, read_parquet('sfba.parquet') s WHERE g.id=JSON_EXTRACT_STRING("wof:hierarchies", '$[0].neighbourhood_id') OR g.id=JSON_EXTRACT_STRING("wof:hierarchies", '$[0].locality_id') GROUP BY g.id, g.name ) TO 'whosonfirst.parquet' (COMPRESSION ZSTD);
+```
+
 ## Serving the "www" folder
 
 You will need to "serve" the `www` folder from a local webserver. These are lots of different ways to do that. I like to use the `fileserver` tool which is part of the [aaronland/go-http-fileserver](https://github.com/aaronland/go-http-fileserver) package:

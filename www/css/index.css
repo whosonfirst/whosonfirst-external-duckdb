@@ -1,0 +1,21 @@
+     #feedback {
+	     margin-bottom: 1rem;
+	     font-style:italic;
+     }
+
+     .grid-view {
+	     display: grid;
+	     grid-template-columns:1fr 1fr;
+	     gap: 50px 10px;
+     }
+     
+     #results {
+	     max-height: 80vh;
+	     overflow:scroll;
+     }
+
+     #map {
+	     width: 100%;
+	     height: 100vh;
+     }
+     
