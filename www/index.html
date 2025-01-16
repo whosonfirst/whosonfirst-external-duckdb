@@ -34,9 +34,9 @@
       <div class="grid-view">
 	  <div id="map"></div>	  
 	  <div>
-	      <input type="text" id="q" value="" placeholder="" />
-	      <select id="locality"></select>
-	      <select id="neighbourhood"></select>	      
+	      <input type="text" id="q" value="" placeholder="" disabled="disabled" />
+	      <select id="locality" disabled="disabled"></select>
+	      <select id="neighbourhood" disabled="disabled"></select>	      
 	      <button id="submit" type="submit" disabled="disabled">Search</button>
 	      <div id="results">
 	      </div>
@@ -66,6 +66,11 @@
 	   });	   
 
 	   const num_formatter = new Intl.NumberFormat();
+
+	   var query_el = document.getElementById("q");
+	   var locality_el = document.getElementById("locality");
+	   var neighbourhood_el = document.getElementById("neighbourhood");	   	   
+	   var button_el = document.getElementById("submit");
 	   
 	   fb.innerText = "Connecting to database";
 	   
@@ -202,14 +207,16 @@
 	       }
 
 	       var neighbourhoods = async function(locality_id) {
-
-		   var sel = document.getElementById("neighbourhood");
-		   sel.innerHTML = "";
+		   
+		   neighbourhood_el.innerHTML = "";
 		   
 		   if (locality_id == -1){
 		       return;
 		   }
 
+		   locality_el.setAttribute("disabled", "disabled");
+		   neighbourhood_el.setAttribute("disabled", "disabled");
+		   
 		   var neighbourhood_names = {};
 		   var neighbourhood_count = 0;
 
@@ -244,7 +251,7 @@
 		       opt.setAttribute("value", "-1");
 		       opt.appendChild(document.createTextNode(""));
 		       
-		       sel.appendChild(opt);
+		       neighbourhood_el.appendChild(opt);
 		       
 		       for (var i in names){
 			   
@@ -259,11 +266,19 @@
 			       opt.setAttribute("value", id);
 			       opt.appendChild(document.createTextNode(name));
 			       
-			       sel.appendChild(opt);
+			       neighbourhood_el.appendChild(opt);
 			   }
 		       }
+
+		       locality_el.removeAttribute("disabled");
+		       neighbourhood_el.removeAttribute("disabled");
+		       
 		   };
-		   
+
+		   fb.innerText = "Fetching neighbourhoods";
+
+		   // TO DO: check cache...
+		       
 		   const neighbourhood_results = await conn.query("SELECT DISTINCT(JSON_EXTRACT_STRING(\"wof:hierarchies\", '$[0].neighbourhood_id')) AS neighbourhood_id FROM read_parquet('http://localhost:8080/data/sfba.parquet') WHERE JSON_EXTRACT(\"wof:hierarchies\", '$[0].locality_id') = '" + locality_id + "'");
 
 		   for (const row of neighbourhood_results) {
@@ -274,10 +289,10 @@
 		       
 		       neighbourhood_count += 1;
 
-		       console.log("WTF", row.neighbourhood_id)
+		       fb.innerText = "Processing neighbourhoods " + neighbourhood_count;
+		       
 		       const neighbourhood_url = "https://data.whosonfirst.org/geojson/" + row.neighbourhood_id;
 		       console.log("Fetch", neighbourhood_url);
-		       // continue;
 		       
 		       fetch(neighbourhood_url)
 			   .then((response) => response.json())
@@ -286,10 +301,11 @@
 			       const id = data.properties["wof:id"];
 			       const name = data.properties["wof:name"];
 
-			       console.log("WUT", id, name);
 			       neighbourhood_names[id] = name;
 			       
 			       neighbourhood_count -=1;
+
+			       fb.innerText = "Processingg neighbourhoods " + neighbourhood_count;
 			       
 			       if (neighbourhood_count == 0){
 				   draw_neighbourhoods();
@@ -310,7 +326,7 @@
 		   
 	       };
 	       
-	       sel.onchange = function(e){
+	       locality_el.onchange = function(e){
 		   var el = e.target;
 		   var locality_id = el.value;
 
@@ -364,21 +380,21 @@
 	   await conn.query("PRAGMA create_fts_index('search', 'id', 'name', 'address', 'locality_id', 'neighbourhood_id')");
 	   
 	   fb.innerText = "Ready to search";
-
-	   var input = document.getElementById("q");
-	   var locality = document.getElementById("locality");	   
 	   
-	   var b = document.getElementById("submit");
-	   b.removeAttribute("disabled");
+	   button_el.removeAttribute("disabled");
+	   query_el.removeAttribute("disabled");
+	   locality_el.removeAttribute("disabled");
+	   neighbourhood_el.removeAttribute("disabled");	   	   
 	   
-	   b.onclick = async function(e){
+	   button_el.onclick = async function(e){
 
 	       if (markers_layer){
 		   map.removeLayer(markers_layer);
 	       }
 	       
-	       var q = input.value;
-	       var locality_id = parseInt(locality.value);
+	       var q = query_el.value;
+	       var locality_id = parseInt(locality_el.value);
+	       var neighbourhood_id = parseInt(neighbourhood_el.value);	       
 	       
 	       var html_results = document.getElementById("results");
 	       html_results.innerText = "";
@@ -392,7 +408,11 @@
 	       if ((locality_id != NaN) && (locality_id != -1)){
 		   where.push("locality_id = " + locality_id);
 	       }
-		       
+
+	       if ((neighbourhood_id != NaN) && (neighbourhood_id != -1)){
+		   where.push("neighbourhood_id = " + neighbourhood_id);
+	       }
+	       
 	       const str_where = where.join(" AND ");
 
 	       const ids_results = await conn.query("SELECT fts_main_search.match_bm25(id, '" + q + "') AS score, id FROM search WHERE " + str_where + " ORDER BY score DESC");
