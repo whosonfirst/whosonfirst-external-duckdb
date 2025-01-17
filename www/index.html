@@ -4,18 +4,35 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>duckdb-wasm-local example</title>
+    <link rel="stylesheet" type="text/css" href="css/bootstrap.min.css" />    
     <link rel="stylesheet" type="text/css" href="css/leaflet.css" />
     <link rel="stylesheet" type="text/css" href="css/index.css" />    
   </head>
   <body>
-      <div id="feedback">Loading DuckDB</div>
       <div class="grid-view">
 	  <div id="map"></div>	  
 	  <div>
-	      <input type="text" id="q" value="" placeholder="" disabled="disabled" />
-	      <select id="locality" disabled="disabled"></select>
-	      <select id="neighbourhood" disabled="disabled"></select>	      
-	      <button id="submit" type="submit" disabled="disabled">Search</button>
+	      <div id="feedback">Loading DuckDB</div>
+
+	      <form class="form">
+		  <div class="mb-3" id="query-wrapper">
+		      <label for="q" class="form-label">Query</label>		      
+		      <input type="text" class="form-control" id="q" value="" placeholder="Enter a query term or phrase to search for" disabled="disabled" />
+		  </div>
+		  
+		  <div class="mb-3" id="locality-wrapper">
+		      <label for="locality" class="form-label">Locality</label>
+		      <select id="locality" disabled="disabled" class="form-select" ></select>
+		  </div>
+
+		  <div class="mb-3" id="neighbourhoood-wrapper">
+		      <label for="neighbourhood" class="form-label">Neighbouhood</label>		      
+		      <select id="neighbourhood" disabled="disabled" class="form-select" ></select>
+		  </div>
+		  
+		  <button class="btn btn-primary" id="submit" type="submit" disabled="disabled">Search</button>
+	      </form>
+	  
 	      <div id="results">
 	      </div>
 	  </div>
@@ -26,6 +43,7 @@
       <script type="text/javascript" src="javascript/init.js"></script>
       
       <script type="module">
+       
        // import * as duckdbduckdbWasm from "https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.28.1-dev106.0/+esm";
        import * as duckdbduckdbWasm from "./duckdb-wasm-local/duckdb-wasm.js"
        import * as app from "./javascript/app.js"

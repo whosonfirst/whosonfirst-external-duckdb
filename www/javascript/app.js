@@ -1,5 +1,9 @@
 export { start };
 
+var map;
+var base_layer;
+var markers_layer;
+
 async function start(db){
 
     var fb = document.getElementById("feedback");
@@ -24,21 +28,14 @@ async function start(db){
     const conn = await db.connect();
     
     fb.innerText = "Setting up map";
-    
-    var map;
-    var base_layer;
-    var markers_layer;
-    
+        
     // Apparently ST_Extent_Agg is not available in duckdb-wasm
     // await conn.query("LOAD spatial");
     // const extent_r = await conn.query("SELECT ST_Extent_Agg(geom) FROM (SELECT ST_GeomFromWKB(geom) FROM read_parquet('http://localhost:8080/data/sfba.parquet')) AS _(geom)");
-    
-    /*
-       
-       Error: Catalog Error: Scalar Function with name st_extent_agg does not exist!
-       Did you mean "ST_Extent"?
-       LINE 1: SELECT ST_Extent_Agg(geom) FROM (SELECT ST_Geo...
-     */
+    //
+    // Error: Catalog Error: Scalar Function with name st_extent_agg does not exist!
+    // Did you mean "ST_Extent"?
+    // LINE 1: SELECT ST_Extent_Agg(geom) FROM (SELECT ST_Geo...
     
     var min_x;
     var min_y;
@@ -104,130 +101,7 @@ async function start(db){
 	    map.removeLayer(markers_layer);
 	}
 	
-	var q = query_el.value;
-	var locality_id = parseInt(locality_el.value);
-	var neighbourhood_id = parseInt(neighbourhood_el.value);	       
-
-	console.log("L", locality_id, (! locality_id == NaN));
-	console.log("N", neighbourhood_id, (neighbourhood_id !== NaN), (! neighbourhood_id == NaN));	
-	
-	var html_results = document.getElementById("results");
-	html_results.innerText = "";
-	
-	fb.innerText = "Performing search";
-	
-	var where = [
-	    "score IS NOT NULL",
-	];
-	
-	if ((locality_id) && (locality_id != -1)){
-	    where.push("locality_id = " + locality_id);
-	}
-	
-	if ((neighbourhood_id) && (neighbourhood_id != -1)){
-	    where.push("neighbourhood_id = " + neighbourhood_id);
-	}
-	
-	const str_where = where.join(" AND ");
-	
-	const ids_results = await conn.query("SELECT fts_main_search.match_bm25(id, '" + q + "') AS score, id FROM search WHERE " + str_where + " ORDER BY score DESC");
-	
-	var ids_count = ids_results.toArray().length;
-	
-	if (! ids_count){
-	    fb.innerText = "No results found. Ready to search";
-	    return false;
-	}
-	
-	var ids_list = [];
-	
-	for (const row of ids_results) {
-	    ids_list.push("'" + row.id + "'");
-        }
-	
-	const search_results = await conn.query("SELECT fsq_place_id AS id, name, address, locality, JSON(fsq_category_labels) AS categories, latitude, longitude FROM read_parquet('http://localhost:8080/data/sfba.parquet') WHERE fsq_place_id IN ( " + ids_list.join(",") + ") AND date_closed IS NULL");
-	
-	var count_results = search_results.toArray().length;
-	
-	var html_list = document.createElement("ul");
-	
-	switch (count_results) {
-	    case 1:
-		fb.innerText = "Compiling only result";
-		break;
-	    default:
-		fb.innerText = "Compiling " + count_results + " results";
-		break;
-	}
-	
-	var features = [];
-	
-	for (const row of search_results) {
-	    
-	    var props = {
-		'id': row.id,
-		'name': row.name,
-		'address': row.address,
-		'locality': row.locality,
-		'categories': JSON.parse(row.categories),
-	    };
-	    
-	    var geom = {
-		'type': 'Point',
-		'coordinates': [ row.longitude, row.latitude ],
-	    };
-	    
-	    var f = {
-		'type': 'Feature',
-		'geometry': geom,
-		'properties': props,
-	    }
-	    
-	    features.push(f);
-	    
-	    var item = document.createElement("li");
-	    
-	    item.appendChild(document.createTextNode(row.name));
-	    item.appendChild(document.createElement("br"));
-	    item.appendChild(document.createTextNode(row.address + ", " + row.locality));
-	    item.appendChild(document.createElement("br"));
-	    
-	    if (row.categories){
-		item.appendChild(document.createTextNode(row.categories));
-	    }
-	    
-	    html_list.appendChild(item);
-        }
-	
-	var markers_style = {
-	    radius: 8,
-	    fillColor: "#ff7800",
-	    color: "#000",
-	    weight: 1,
-	    opacity: 1,
-	    fillOpacity: 0.8
-	};
-	
-	var markers_opts = {
-	    pointToLayer: function (feature, latlng) {
-		return L.circleMarker(latlng, markers_style);
-	    }
-	};
-	
-	markers_layer = L.geoJSON(features, markers_opts);
-	markers_layer.addTo(map);
-	
-	html_results.appendChild(html_list);
-	
-	switch (count_results){
-	    case 1:
-		fb.innerText = "Ready to search again.";
-		break;
-	    default:		       
-		fb.innerText = num_formatter.format(count_results) + " results. Ready to search again.";
-		break;
-	}
-	
+	do_search(conn);
 	return false;
     };
     
@@ -286,6 +160,149 @@ function draw_names(select_el, names_table, onchange_cb) {
     
     if (onchange_cb) {
 	select_el.onchange = onchange_cb;
+    }
+}
+
+async function do_search(conn){
+
+    var fb = document.getElementById("feedback");
+    
+    var query_el = document.getElementById("q");
+    var locality_el = document.getElementById("locality");
+    var neighbourhood_el = document.getElementById("neighbourhood");	   	   
+    var results_el = document.getElementById("results");
+    
+    results_el.innerText = "";
+    
+    var q = query_el.value;
+    var locality_id = parseInt(locality_el.value);
+    var neighbourhood_id = parseInt(neighbourhood_el.value);	       
+    
+    fb.innerText = "Performing search";
+    
+    var where = [
+	"score IS NOT NULL",
+    ];
+    
+    if ((locality_id) && (locality_id != -1)){
+	where.push("locality_id = " + locality_id);
+    }
+    
+    if ((neighbourhood_id) && (neighbourhood_id != -1)){
+	where.push("neighbourhood_id = " + neighbourhood_id);
+    }
+    
+    const str_where = where.join(" AND ");
+    
+    // Note the "conjunctive := 1" bit - this is what is necessary to match all the terms
+    const ids_results = await conn.query("SELECT fts_main_search.match_bm25(id, '" + q + "', conjunctive := 1) AS score, id FROM search WHERE " + str_where + " ORDER BY score DESC");
+    
+    var ids_count = ids_results.toArray().length;
+    
+    if (! ids_count){
+	fb.innerText = "No results found. Ready to search";
+	return false;
+    }
+    
+    var ids_list = [];
+    
+    for (const row of ids_results) {
+	ids_list.push("'" + row.id + "'");
+    }
+    
+    const search_results = await conn.query("SELECT fsq_place_id AS id, name, address, locality, JSON(fsq_category_labels) AS categories, latitude, longitude FROM read_parquet('http://localhost:8080/data/sfba.parquet') WHERE fsq_place_id IN ( " + ids_list.join(",") + ") AND date_closed IS NULL");
+    
+    await draw_search_results(search_results);
+}
+
+async function draw_search_results(search_results) {
+
+    var fb = document.getElementById("feedback");
+    
+    var query_el = document.getElementById("q");
+    var locality_el = document.getElementById("locality");
+    var neighbourhood_el = document.getElementById("neighbourhood");	   	   
+    var results_el = document.getElementById("results");
+    
+    var count_results = search_results.toArray().length;
+    
+    var list_el = document.createElement("ul");
+    
+    switch (count_results) {
+	case 1:
+	    fb.innerText = "Compiling only result";
+	    break;
+	default:
+	    fb.innerText = "Compiling " + count_results + " results";
+	    break;
+    }
+    
+    var features = [];
+    
+    for (const row of search_results) {
+	
+	var props = {
+	    'id': row.id,
+	    'name': row.name,
+	    'address': row.address,
+	    'locality': row.locality,
+	    'categories': JSON.parse(row.categories),
+	};
+	
+	var geom = {
+	    'type': 'Point',
+	    'coordinates': [ row.longitude, row.latitude ],
+	};
+	
+	var f = {
+	    'type': 'Feature',
+	    'geometry': geom,
+	    'properties': props,
+	}
+	
+	features.push(f);
+	
+	var item = document.createElement("li");
+	
+	item.appendChild(document.createTextNode(row.name));
+	item.appendChild(document.createElement("br"));
+	item.appendChild(document.createTextNode(row.address + ", " + row.locality));
+	item.appendChild(document.createElement("br"));
+	
+	if (row.categories){
+	    item.appendChild(document.createTextNode(row.categories));
+	}
+	
+	list_el.appendChild(item);
+    }
+    
+    var markers_style = {
+	radius: 8,
+	fillColor: "#ff7800",
+	color: "#000",
+	weight: 1,
+	opacity: 1,
+	fillOpacity: 0.8
+    };
+    
+    var markers_opts = {
+	pointToLayer: function (feature, latlng) {
+	    return L.circleMarker(latlng, markers_style);
+	}
+    };
+    
+    markers_layer = L.geoJSON(features, markers_opts);
+    markers_layer.addTo(map);
+    
+    results_el.appendChild(list_el);
+    
+    switch (count_results){
+	case 1:
+	    fb.innerText = "Ready to search again.";
+	    break;
+	default:		       
+	    fb.innerText = num_formatter.format(count_results) + " results. Ready to search again.";
+	    break;
     }
 }
 
@@ -381,4 +398,10 @@ async function fetch_neighbourhoods(conn, locality_id) {
     locality_el.removeAttribute("disabled");
     neighbourhood_el.removeAttribute("disabled");
     fb.innerText = "Ready to search";	
+}
+
+async function fetch_categories(conn, placetype, wof_id) {
+
+    // SELECT fsq_category_ids, fsq_category_labels FROM read_parquet('http://localhost:8080/data/sfba.parquet') WHERE JSON("wof:hierarchies")[0].locality_id = '85921881' GROUP BY fsq_category_ids, fsq_category_labels ORDER BY fsq_category_labels;
+
 }
