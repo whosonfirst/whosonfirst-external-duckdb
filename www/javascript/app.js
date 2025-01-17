@@ -79,94 +79,9 @@ async function start(db){
     
     base_layer.addTo(map);
     
-    // START OF put me in a function (and do this asynchronously)
-    
-    fb.innerText = "Setting up localities";
-    
-    // Note: It is not really useful to use SELECT DISTINCT(locality) FROM read_parquet('sfba.parquet') ORDER BY locality ASC;
-    // because it just returns garbage and gibberish.
-    
-    // Wut: The first query triggers the following error:
-    // DuckDB: Error: Binder Error: Cannot extract field 'locality_id' from expression "array_extract(CAST(json_extract(wof:hierarchies, '$') AS VARCHAR), CAST(0 AS BIGINT))" because it is not a struct or a union
-    // const locality_results = await conn.query("SELECT DISTINCT(JSON(\"wof:hierarchies\")[0].locality_id) FROM read_parquet('http://localhost:8080/data/sfba.parquet')");
-    
-    // This however works...
-    const locality_results = await conn.query("SELECT DISTINCT(JSON_EXTRACT_STRING(\"wof:hierarchies\", '$[0].locality_id')) AS locality_id FROM read_parquet('http://localhost:8080/data/sfba.parquet')");
-
-    // START OF put me in a (global) function
-    
-    var fetch_neighbourhoods = async function(locality_id) {
-	    
-	neighbourhood_el.innerHTML = "";
-	
-	if (locality_id == -1){
-	    return;
-	}
-	
-	locality_el.setAttribute("disabled", "disabled");
-	neighbourhood_el.setAttribute("disabled", "disabled");
-	
-	fb.innerText = "Fetching neighbourhoods";
-	
-	const neighbourhood_results = await conn.query("SELECT DISTINCT(JSON_EXTRACT_STRING(\"wof:hierarchies\", '$[0].neighbourhood_id')) AS neighbourhood_id FROM read_parquet('http://localhost:8080/data/sfba.parquet') WHERE JSON_EXTRACT(\"wof:hierarchies\", '$[0].locality_id') = '" + locality_id + "'");
-
-	var neighbourhood_names = {};	
-	var neighbourhood_ids = [];
-	
-	for (const row of neighbourhood_results) {
-	    neighbourhood_ids.push("'" + row.neighbourhood_id + "'");
-	}
-	
-	var str_ids = neighbourhood_ids.join(",");
-	
-	const names_results = await conn.query("SELECT id, name FROM read_parquet('http://localhost:8080/data/whosonfirst.parquet') WHERE id IN (" + str_ids + ")");
-	
-	for (const row of names_results){
-	    neighbourhood_names[row.id] = row.name;
-	}
-	
-	draw_names(neighbourhood_el, neighbourhood_names);
-	
-	locality_el.removeAttribute("disabled");
-	neighbourhood_el.removeAttribute("disabled");
-	fb.innerText = "Ready to search";	
-    };
-
-    // END OF put me in a (global) function   
-    
-    var locality_onchange = async function(e){
-	var el = e.target;
-	var locality_id = el.value;
-	
-	fetch_neighbourhoods(locality_id);
-	return false;
-    };
-
     fb.innerText = "Setting up localities";
 
-    var locality_names = {};
-    var locality_ids = [];
-    
-    for (const row of locality_results) {
-
-	if (! row.locality_id){
-	    continue;
-	}
-	
-	locality_ids.push("'" + row.locality_id + "'");
-    }
-
-    var str_ids = locality_ids.join(",");
-
-    const names_results = await conn.query("SELECT id, name FROM read_parquet('http://localhost:8080/data/whosonfirst.parquet') WHERE id IN (" + str_ids + ")");
-
-    for (const row of names_results){
-	locality_names[row.id] = row.name;
-    }
-
-    draw_names(locality_el, locality_names, locality_onchange);
-
-    // END OF put me in a function    
+    fetch_localities(conn);
     
     fb.innerText = "Setting up search table";
     
@@ -302,7 +217,6 @@ async function start(db){
 	markers_layer = L.geoJSON(features, markers_opts);
 	markers_layer.addTo(map);
 	
-	
 	html_results.appendChild(html_list);
 	
 	switch (count_results){
@@ -321,8 +235,6 @@ async function start(db){
 
 function draw_names(select_el, names_table, onchange_cb) {
 
-    console.log("DRAW", select_el, names_table);
-    
     var lookup = {};
     var names = [];
     
@@ -376,4 +288,97 @@ function draw_names(select_el, names_table, onchange_cb) {
 	select_el.onchange = onchange_cb;
     }
 }
+
+async function fetch_localities(conn){
+
+    var fb = document.getElementById("feedback");
     
+    var query_el = document.getElementById("q");
+    var locality_el = document.getElementById("locality");
+    var neighbourhood_el = document.getElementById("neighbourhood");	   	   
+    
+    // Note: It is not really useful to use SELECT DISTINCT(locality) FROM read_parquet('sfba.parquet') ORDER BY locality ASC;
+    // because it just returns garbage and gibberish.
+    
+    // Wut: The first query triggers the following error:
+    // DuckDB: Error: Binder Error: Cannot extract field 'locality_id' from expression "array_extract(CAST(json_extract(wof:hierarchies, '$') AS VARCHAR), CAST(0 AS BIGINT))" because it is not a struct or a union
+    // const locality_results = await conn.query("SELECT DISTINCT(JSON(\"wof:hierarchies\")[0].locality_id) FROM read_parquet('http://localhost:8080/data/sfba.parquet')");
+    
+    // This however works...
+    const locality_results = await conn.query("SELECT DISTINCT(JSON_EXTRACT_STRING(\"wof:hierarchies\", '$[0].locality_id')) AS locality_id FROM read_parquet('http://localhost:8080/data/sfba.parquet')");
+    
+    var locality_onchange = async function(e){
+	var el = e.target;
+	var locality_id = el.value;
+	
+	fetch_neighbourhoods(conn, locality_id);
+	return false;
+    };
+
+    fb.innerText = "Setting up localities";
+
+    var locality_names = {};
+    var locality_ids = [];
+    
+    for (const row of locality_results) {
+
+	if (! row.locality_id){
+	    continue;
+	}
+	
+	locality_ids.push("'" + row.locality_id + "'");
+    }
+
+    var str_ids = locality_ids.join(",");
+
+    const names_results = await conn.query("SELECT id, name FROM read_parquet('http://localhost:8080/data/whosonfirst.parquet') WHERE id IN (" + str_ids + ")");
+
+    for (const row of names_results){
+	locality_names[row.id] = row.name;
+    }
+
+    draw_names(locality_el, locality_names, locality_onchange);
+}
+
+async function fetch_neighbourhoods(conn, locality_id) {
+
+    var fb = document.getElementById("feedback");
+    
+    var query_el = document.getElementById("q");
+    var locality_el = document.getElementById("locality");
+    var neighbourhood_el = document.getElementById("neighbourhood");	   	   
+    
+    neighbourhood_el.innerHTML = "";
+    
+    if (locality_id == -1){
+	return;
+    }
+    
+    locality_el.setAttribute("disabled", "disabled");
+    neighbourhood_el.setAttribute("disabled", "disabled");
+    
+    fb.innerText = "Fetching neighbourhoods";
+    
+    const neighbourhood_results = await conn.query("SELECT DISTINCT(JSON_EXTRACT_STRING(\"wof:hierarchies\", '$[0].neighbourhood_id')) AS neighbourhood_id FROM read_parquet('http://localhost:8080/data/sfba.parquet') WHERE JSON_EXTRACT(\"wof:hierarchies\", '$[0].locality_id') = '" + locality_id + "'");
+    
+    var neighbourhood_names = {};	
+    var neighbourhood_ids = [];
+    
+    for (const row of neighbourhood_results) {
+	neighbourhood_ids.push("'" + row.neighbourhood_id + "'");
+    }
+    
+    var str_ids = neighbourhood_ids.join(",");
+    
+    const names_results = await conn.query("SELECT id, name FROM read_parquet('http://localhost:8080/data/whosonfirst.parquet') WHERE id IN (" + str_ids + ")");
+    
+    for (const row of names_results){
+	neighbourhood_names[row.id] = row.name;
+    }
+    
+    draw_names(neighbourhood_el, neighbourhood_names);
+    
+    locality_el.removeAttribute("disabled");
+    neighbourhood_el.removeAttribute("disabled");
+    fb.innerText = "Ready to search";	
+}
