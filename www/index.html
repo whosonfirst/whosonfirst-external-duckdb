@@ -4,37 +4,43 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>duckdb-wasm-local example</title>
-    <link rel="stylesheet" type="text/css" href="css/bootstrap.min.css" />    
+    <link rel="stylesheet" type="text/css" href="css/bootstrap.min.css" />
     <link rel="stylesheet" type="text/css" href="css/leaflet.css" />
     <link rel="stylesheet" type="text/css" href="css/index.css" />    
   </head>
   <body>
       <div class="grid-view">
 	  <div id="map"></div>	  
-	  <div>
-	      <div id="feedback">Loading DuckDB</div>
+	  <div class="grid-view">
 
-	      <form class="form">
-		  <div class="mb-3" id="query-wrapper">
-		      <label for="q" class="form-label">Query</label>		      
-		      <input type="text" class="form-control" id="q" value="" placeholder="Enter a query term or phrase to search for" disabled="disabled" />
+	      <div id="foo" class="panel">
+		  <div id="feedback">Loading DuckDB</div>
+		  <div id="results">
 		  </div>
-		  
-		  <div class="mb-3" id="locality-wrapper">
-		      <label for="locality" class="form-label">Locality</label>
-		      <select id="locality" disabled="disabled" class="form-select" ></select>
-		  </div>
-
-		  <div class="mb-3" id="neighbourhoood-wrapper">
-		      <label for="neighbourhood" class="form-label">Neighbouhood</label>		      
-		      <select id="neighbourhood" disabled="disabled" class="form-select" ></select>
-		  </div>
-		  
-		  <button class="btn btn-primary" id="submit" type="submit" disabled="disabled">Search</button>
-	      </form>
-	  
-	      <div id="results">
 	      </div>
+	      
+	      <div id="form" class="panel">
+
+		  <div>
+		      <div class="mb-3" id="query-wrapper">
+			  <label for="q" class="form-label">Query</label>		      
+			  <input type="text" class="form-control" id="q" value="" placeholder="Enter a query term or phrase to search for" disabled="disabled" />
+		      </div>
+		      
+		      <div class="mb-3" id="locality-wrapper">
+			  <label for="locality" class="form-label">Locality</label>
+			  <select id="locality" disabled="disabled" class="form-select" ></select>
+		      </div>
+		      
+		      <div class="mb-3" id="neighbourhoood-wrapper">
+			  <label for="neighbourhood" class="form-label">Neighbouhood</label>		      
+			  <select id="neighbourhood" disabled="disabled" class="form-select" ></select>
+		      </div>
+		      
+		      <button class="btn btn-primary" id="submit" type="submit" disabled="disabled">Search</button>
+		  </div>
+	      </div>
+	      
 	  </div>
       </div>
 
