@@ -312,7 +312,7 @@ async function fetch_localities(conn){
     
     var query_el = document.getElementById("q");
     var locality_el = document.getElementById("locality");
-    var neighbourhood_el = document.getElementById("neighbourhood");	   	   
+    var wrapper_el = document.getElementById("locality-wrapper");    
     
     // Note: It is not really useful to use SELECT DISTINCT(locality) FROM read_parquet('sfba.parquet') ORDER BY locality ASC;
     // because it just returns garbage and gibberish.
@@ -355,24 +355,26 @@ async function fetch_localities(conn){
     }
 
     draw_names(locality_el, locality_names, locality_onchange);
+    wrapper_el.style.display = "block";
 }
 
 async function fetch_neighbourhoods(conn, locality_id) {
 
     var fb = document.getElementById("feedback");
-    
-    var query_el = document.getElementById("q");
-    var locality_el = document.getElementById("locality");
-    var neighbourhood_el = document.getElementById("neighbourhood");	   	   
+
+    var locality_el = document.getElementById("locality");    
+    var neighbourhood_el = document.getElementById("neighbourhood");
+    var wrapper_el = document.getElementById("neighbourhood-wrapper");	   	       
     
     neighbourhood_el.innerHTML = "";
     
     if (locality_id == -1){
+	wrapper_el.style.display = "none";
 	return;
     }
     
-    locality_el.setAttribute("disabled", "disabled");
-    neighbourhood_el.setAttribute("disabled", "disabled");
+    // locality_el.setAttribute("disabled", "disabled");
+    // neighbourhood_el.setAttribute("disabled", "disabled");
     
     fb.innerText = "Fetching neighbourhoods";
     
@@ -382,7 +384,18 @@ async function fetch_neighbourhoods(conn, locality_id) {
     var neighbourhood_ids = [];
     
     for (const row of neighbourhood_results) {
+	
+	if (row.neighbourhood_id == null){
+	    continue;
+	}
+	
 	neighbourhood_ids.push("'" + row.neighbourhood_id + "'");
+    }
+
+    if (neighbourhood_ids.length == 0){
+	fb.innerText = "No neighbourhoods found for locality. Ready to search.";
+	wrapper_el.style.display = "none";
+	return;
     }
     
     var str_ids = neighbourhood_ids.join(",");
@@ -395,9 +408,11 @@ async function fetch_neighbourhoods(conn, locality_id) {
     
     draw_names(neighbourhood_el, neighbourhood_names);
     
-    locality_el.removeAttribute("disabled");
-    neighbourhood_el.removeAttribute("disabled");
-    fb.innerText = "Ready to search";	
+    // locality_el.removeAttribute("disabled");
+    // neighbourhood_el.removeAttribute("disabled");
+    fb.innerText = "Ready to search";
+    
+    wrapper_el.style.display = "block";    
 }
 
 async function fetch_categories(conn, placetype, wof_id) {
