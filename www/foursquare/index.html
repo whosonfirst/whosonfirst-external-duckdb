@@ -16,14 +16,13 @@
 	      <div id="form" class="panel">
 
 		  <div>
-		      <div class="mb-3" id="query-wrapper">
-			  <label for="q" class="form-label">Query</label>		      
+		      <div class="mb-3 form-inline" id="query-wrapper">
+			  <!-- <label for="q" class="form-label col-auto">Query</label>-->
+			  
 			  <input type="text" class="form-control" id="q" value="" placeholder="Enter a query term or phrase to search for" disabled="disabled" />
-		      </div>
-
-		      <div class="mb-3" id="query-wrapper">		      
 			  <button class="btn btn-primary" id="submit" type="submit" disabled="disabled">Search</button>
 		      </div>
+
 		      
 		      <div class="mb-3" id="locality-wrapper">
 			  <label for="locality" class="form-label">Locality</label>
@@ -48,9 +47,10 @@
       </div>
 
       <script type="text/javascript" src="../javascript/leaflet.js"></script>
-      <script type="text/javascript" src="../javascript/protomaps-leaflet.js"></script>      
-      <script type="text/javascript" src="../javascript/foursquare.init.js"></script>
+      <script type="text/javascript" src="../javascript/protomaps-leaflet.js"></script>
+      <script type="text/javascript" src="../javascript/whosonfirst.spelunker.geojson.js"></script>
       
+      <script type="text/javascript" src="../javascript/foursquare.init.js"></script>
       <script type="module">
        
        // import * as duckdbduckdbWasm from "https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.28.1-dev106.0/+esm";

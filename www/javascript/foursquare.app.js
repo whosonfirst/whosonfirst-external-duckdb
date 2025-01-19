@@ -4,6 +4,9 @@ var map;
 var base_layer;
 var markers_layer;
 
+var dt_formatter;
+var num_formatter;
+
 async function start(db){
 
     var fb = document.getElementById("feedback");
@@ -14,14 +17,14 @@ async function start(db){
     var button_el = document.getElementById("submit");
     
     // en-CA is important in order to get YYYY-MM-dd formatting. Go, Canada!
-    const dt_formatter = new Intl.DateTimeFormat('en-CA', {
+    dt_formatter = new Intl.DateTimeFormat('en-CA', {
 	year: 'numeric',
 	month: '2-digit',
 	day: '2-digit',
 	timeZone: 'America/Los_Angeles',		    
     });	   
 
-    const num_formatter = new Intl.NumberFormat();
+    num_formatter = new Intl.NumberFormat();
         
     fb.innerText = "Connecting to database";
     
@@ -290,9 +293,21 @@ async function draw_search_results(search_results) {
 	    return L.circleMarker(latlng, markers_style);
 	}
     };
+
     
     markers_layer = L.geoJSON(features, markers_opts);
     markers_layer.addTo(map);
+
+    if (features.length > 1){
+
+	var fc = {
+	    'type': 'FeatureCollection',
+	    'features': features,
+	};
+	
+	var bounds = whosonfirst.spelunker.geojson.derive_bounds(fc);
+	map.fitBounds(bounds);
+    }
     
     results_el.appendChild(list_el);
     

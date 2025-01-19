@@ -3,6 +3,15 @@
 	font-style:italic;
 }
 
+#q {
+	width: auto !important;
+	display: inline-block !important;
+}
+
+#submit {
+	margin-top: -5px !important;
+}
+
 #locality-wrapper {
 	display: none;
 }
@@ -71,5 +80,7 @@
 		padding: none;		
 	}
 
-	
+	#q {
+		max-width: 65vw;
+	}
 }
