@@ -67,14 +67,32 @@ pgf:devanagari:version 1
 
 ### Who's On First properties (names)
 
-Create a properties lookup table (currently just for place names for localities and neighbourhoods) derived from the `sfba.parquet` table derived from the [global Who's On First distribution](https://geocode.earth/data/whosonfirst/combined/) produced by Geocode Earth.
-
-_Note: This is a fantastically inefficient query. It could be made better in so many ways not least of which would simply be looping over all the records in `sfba.parquet` manually and doing individual `SELECT` queries. For the time being it is what it is._
+Create a properties lookup table (currently just for place names for localities and neighbourhoods) derived from the `sfba.parquet` table derived from Who's On First records hosted on `data.whosonfirst.org` using the `area-whosonfirst-properties` tool in the [whosonfirst/go-whosonfirst-external](https://github.com/whosonfirst/go-whosonfirst-external?tab=readme-ov-file#area-whosonfirst-properties) package. For example:
 
 ```
-D COPY (SELECT g.id, g.name FROM read_parquet('https://data.geocode.earth/wof/dist/parquet/whosonfirst-data-admin-latest.parquet') g, read_parquet('sfba.parquet') s WHERE g.id=JSON_EXTRACT_STRING("wof:hierarchies", '$[0].neighbourhood_id') OR g.id=JSON_EXTRACT_STRING("wof:hierarchies", '$[0].locality_id') GROUP BY g.id, g.name ) TO 'whosonfirst.parquet' (COMPRESSION ZSTD);
-```
+$> area-whosonfirst-properties/main.go \
+	-area-parquet sfba.parquet \
+	-whosonfirst-parquet whosonfirst.parquet
+```	
 
+And then:
+
+```
+$> duckdb
+v1.1.3 19864453f7
+Enter ".help" for usage hints.
+Connected to a transient in-memory database.
+Use ".open FILENAME" to reopen on a persistent database.
+
+D LOAD spatial;
+D SELECT id, name, ST_AsText(geometry) FROM read_parquet('whosonfirst.parquet') LIMIT 1;
+┌──────────┬──────────────┬──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│    id    │     name     │                                                                           st_astext(geometry)                                                                            │
+│  int32   │   varchar    │                                                                                 varchar                                                                                  │
+├──────────┼──────────────┼──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ 85866851 │ Union Square │ POLYGON ((-122.40238 37.790969, -122.40196 37.788922, -122.402066 37.788721, -122.408952 37.783288, -122.409142 37.783519, -122.410433 37.789951, -122.40238 37.790969)) │
+└──────────┴──────────────┴──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+```
 ## Serving the "www" folder
 
 You will need to "serve" the `www` folder from a local webserver. These are lots of different ways to do that. I like to use the `fileserver` tool which is part of the [aaronland/go-http-fileserver](https://github.com/aaronland/go-http-fileserver) package:
