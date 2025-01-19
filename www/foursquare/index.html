@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>duckdb-wasm-local example</title>
+    <title>duckdb-wasm foursquare example</title>
     <link rel="stylesheet" type="text/css" href="../css/bootstrap.min.css" />
     <link rel="stylesheet" type="text/css" href="../css/leaflet.css" />
     <link rel="stylesheet" type="text/css" href="../css/foursquare.css" />    
@@ -20,6 +20,10 @@
 			  <label for="q" class="form-label">Query</label>		      
 			  <input type="text" class="form-control" id="q" value="" placeholder="Enter a query term or phrase to search for" disabled="disabled" />
 		      </div>
+
+		      <div class="mb-3" id="query-wrapper">		      
+			  <button class="btn btn-primary" id="submit" type="submit" disabled="disabled">Search</button>
+		      </div>
 		      
 		      <div class="mb-3" id="locality-wrapper">
 			  <label for="locality" class="form-label">Locality</label>
@@ -31,7 +35,6 @@
 			  <select id="neighbourhood" disabled="disabled" class="form-select" ></select>
 		      </div>
 		      
-		      <button class="btn btn-primary" id="submit" type="submit" disabled="disabled">Search</button>
 		  </div>
 	      </div>
 
@@ -57,9 +60,7 @@
        window.duckdbduckdbWasm = duckdbduckdbWasm;
        
        getDb().then(async (db) => {
-
 	   app.start(db);
-	   
        }).catch((err) => {
 	   var fb = document.getElementById("feedback");
 	   fb.innerText = "Failed to configure DuckDB: " + err;

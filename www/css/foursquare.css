@@ -23,19 +23,20 @@
 
 .grid-view {
 	display: grid;
-	grid-template-columns:1fr 1fr;
-	gap: 50px 10px;
+	grid-template-columns: 1fr 1fr;
 }
 
 .controls {
-	display: grid;
-	grid-template-columns:1fr 1fr;
+	// display: grid;
+	// grid-template-columns:1fr 1fr;
+	display: flex;
+	flex-direction: row-reverse;
 }
 
 .panel {
 	border-left: solid thin;
-	padding-left: .5rem;
-	padding-right: .5rem;	
+	padding: .5rem;
+	width: 100%;	
 }
 
 @media (min-width: 320px) and (max-width: 768px) {
