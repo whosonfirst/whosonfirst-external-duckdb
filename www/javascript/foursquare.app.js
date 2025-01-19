@@ -30,12 +30,11 @@ async function start(db){
     
     const conn = await db.connect();
     
-    fb.innerText = "Setting up map";
-        
+    fb.innerText = "Setting up map";   
+    
     // Apparently ST_Extent_Agg is not available in duckdb-wasm
-    // await conn.query("LOAD spatial");
+    // await conn.query("LOAD spatial");    
     // const extent_r = await conn.query("SELECT ST_Extent_Agg(geom) FROM (SELECT ST_GeomFromWKB(geom) FROM read_parquet('http://localhost:8080/data/sfba-foursquare.parquet')) AS _(geom)");
-    //
     // Error: Catalog Error: Scalar Function with name st_extent_agg does not exist!
     // Did you mean "ST_Extent"?
     // LINE 1: SELECT ST_Extent_Agg(geom) FROM (SELECT ST_Geo...
@@ -214,8 +213,28 @@ async function do_search(conn){
     }
     
     const search_results = await conn.query("SELECT fsq_place_id AS id, name, address, locality, JSON(fsq_category_labels) AS categories, latitude, longitude FROM read_parquet('http://localhost:8080/data/sfba-foursquare.parquet') WHERE fsq_place_id IN ( " + ids_list.join(",") + ") AND date_closed IS NULL");
+
+    if ((locality_id) && (locality_id != -1)){
+	draw_geometry(conn, "locality", locality_id);
+    }
+    
+    if ((neighbourhood_id) && (neighbourhood_id != -1)){
+	draw_geometry(conn, "neighbourhood", neighbourhood_id);	
+    }
     
     await draw_search_results(search_results);
+}
+
+async function draw_geometry(conn, pane, id) {
+
+    const geom = await get_geometry(conn, id);
+
+    if (! geom){
+	return
+    }
+
+    var geom_layer = L.geoJSON(geom);
+    geom_layer.addTo(map);
 }
 
 async function draw_search_results(search_results) {
@@ -363,7 +382,7 @@ async function fetch_localities(conn){
 
     var str_ids = locality_ids.join(",");
 
-    const names_results = await conn.query("SELECT id, name FROM read_parquet('http://localhost:8080/data/sfba-whosonfirst.parquet') WHERE id IN (" + str_ids + ")");
+    const names_results = await conn.query("SELECT id, name, FROM read_parquet('http://localhost:8080/data/sfba-whosonfirst.parquet') WHERE id IN (" + str_ids + ")");
 
     for (const row of names_results){
 	locality_names[row.id] = row.name;
@@ -415,7 +434,7 @@ async function fetch_neighbourhoods(conn, locality_id) {
     
     var str_ids = neighbourhood_ids.join(",");
     
-    const names_results = await conn.query("SELECT id, name FROM read_parquet('http://localhost:8080/data/sfba-whosonfirst.parquet') WHERE id IN (" + str_ids + ")");
+    const names_results = await conn.query("SELECT id, name  FROM read_parquet('http://localhost:8080/data/sfba-whosonfirst.parquet') WHERE id IN (" + str_ids + ")");
     
     for (const row of names_results){
 	neighbourhood_names[row.id] = row.name;
@@ -434,4 +453,24 @@ async function fetch_categories(conn, placetype, wof_id) {
 
     // SELECT fsq_category_ids, fsq_category_labels FROM read_parquet('http://localhost:8080/data/sfba-foursquare.parquet') WHERE JSON("wof:hierarchies")[0].locality_id = '85921881' GROUP BY fsq_category_ids, fsq_category_labels ORDER BY fsq_category_labels;
 
+}
+
+async function get_geometry(conn, id) {
+
+    try {
+	
+	const results = await conn.query("SELECT geometry FROM read_parquet('http://localhost:8080/data/sfba-whosonfirst.parquet') WHERE id = '" + id + "'");
+	const row = results.get(0)
+
+	if (! row){
+	    console.log("No results", id);
+	    return;
+	}
+	
+	const geom = JSON.parse(row.geometry);
+	return geom
+	
+    } catch (err) {
+	console.error("Failed to get geometry for feature", id, err);
+    }
 }
