@@ -4,20 +4,14 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>duckdb-wasm-local example</title>
-    <link rel="stylesheet" type="text/css" href="css/bootstrap.min.css" />
-    <link rel="stylesheet" type="text/css" href="css/leaflet.css" />
-    <link rel="stylesheet" type="text/css" href="css/index.css" />    
+    <link rel="stylesheet" type="text/css" href="../css/bootstrap.min.css" />
+    <link rel="stylesheet" type="text/css" href="../css/leaflet.css" />
+    <link rel="stylesheet" type="text/css" href="../css/foursquare.css" />    
   </head>
   <body>
       <div class="grid-view">
 	  <div id="map"></div>	  
-	  <div class="grid-view">
-
-	      <div id="foo" class="panel">
-		  <div id="feedback">Loading DuckDB</div>
-		  <div id="results">
-		  </div>
-	      </div>
+	  <div class="controls">
 	      
 	      <div id="form" class="panel">
 
@@ -40,19 +34,25 @@
 		      <button class="btn btn-primary" id="submit" type="submit" disabled="disabled">Search</button>
 		  </div>
 	      </div>
+
+	      <div id="foo" class="panel">
+		  <div id="feedback">Loading DuckDB</div>
+		  <div id="results">
+		  </div>
+	      </div>
 	      
 	  </div>
       </div>
 
-      <script type="text/javascript" src="javascript/leaflet.js"></script>
-      <script type="text/javascript" src="javascript/protomaps-leaflet.js"></script>      
-      <script type="text/javascript" src="javascript/init.js"></script>
+      <script type="text/javascript" src="../javascript/leaflet.js"></script>
+      <script type="text/javascript" src="../javascript/protomaps-leaflet.js"></script>      
+      <script type="text/javascript" src="../javascript/foursquare.init.js"></script>
       
       <script type="module">
        
        // import * as duckdbduckdbWasm from "https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.28.1-dev106.0/+esm";
-       import * as duckdbduckdbWasm from "./duckdb-wasm-local/duckdb-wasm.js"
-       import * as app from "./javascript/app.js"
+       import * as duckdbduckdbWasm from "../duckdb-wasm-local/duckdb-wasm.js"
+       import * as app from "../javascript/foursquare.app.js"
        
        window.duckdbduckdbWasm = duckdbduckdbWasm;
        
