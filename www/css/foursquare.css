@@ -48,6 +48,27 @@
 	width: 100%;	
 }
 
+.venue {
+	list-style-type: none;
+	margin-bottom: 1rem;
+	border-bottom: 1px dotted #ccc;
+	padding-bottom: 1rem;
+}
+
+.venue-name {
+	font-weight: 700;
+}
+
+.venue-categories {
+	margin: 0px;
+	padding: 0px;
+	font-size: small;
+}
+	
+.venue-categories li {
+	list-style-type: none;
+}
+
 @media (min-width: 320px) and (max-width: 768px) {
 
 	#map {
@@ -63,12 +84,6 @@
 
 	.controls {
 		display: block;
-		// display: flex !important;
-		// flex-direction: row-reverse;
-		// grid-template-rows: 1fr 25vh;
-		// grid-template-columns: 1fr;;
-		// height: 100vh;
-		
 	}
 
 	.controls .panel {
@@ -84,3 +99,4 @@
 		max-width: 65vw;
 	}
 }
+

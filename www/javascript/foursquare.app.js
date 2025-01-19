@@ -3,6 +3,8 @@ export { start };
 var map;
 var base_layer;
 var markers_layer;
+var locality_layers = [];
+var neighbourhood_layers = [];
 
 var dt_formatter;
 var num_formatter;
@@ -66,7 +68,7 @@ async function start(db){
 	[ max_y, max_x ],
     ];
     
-    map = L.map('map');
+    map = L.map('map');    
     map.fitBounds(bounds);
         
     base_layer = protomapsL.leafletLayer({
@@ -77,6 +79,17 @@ async function start(db){
     });
     
     base_layer.addTo(map);
+
+    const panes = {
+	"markers": 3000,
+	"neighbourhoods": 2000,
+	"localities": 1000,
+    };
+
+    for (var label in panes) {
+	var p = map.createPane(label);
+	p.style.zIndex = panes[label];
+    }
     
     fb.innerText = "Setting up localities";
 
@@ -102,6 +115,17 @@ async function start(db){
 	if (markers_layer){
 	    map.removeLayer(markers_layer);
 	}
+
+	for (var i in neighbourhood_layers){
+	    map.removeLayer(neighbourhood_layers[i]);
+	}
+
+	for (var i in locality_layers){
+	    map.removeLayer(locality_layers[i]);
+	}
+	
+	neighbourhood_layers = [];
+	locality_layers = [];
 	
 	do_search(conn);
 	return false;
@@ -215,11 +239,11 @@ async function do_search(conn){
     const search_results = await conn.query("SELECT fsq_place_id AS id, name, address, locality, JSON(fsq_category_labels) AS categories, latitude, longitude FROM read_parquet('http://localhost:8080/data/sfba-foursquare.parquet') WHERE fsq_place_id IN ( " + ids_list.join(",") + ") AND date_closed IS NULL");
 
     if ((locality_id) && (locality_id != -1)){
-	draw_geometry(conn, "locality", locality_id);
+	draw_geometry(conn, "localities", locality_id);
     }
     
     if ((neighbourhood_id) && (neighbourhood_id != -1)){
-	draw_geometry(conn, "neighbourhood", neighbourhood_id);	
+	draw_geometry(conn, "neighbourhoods", neighbourhood_id);	
     }
     
     await draw_search_results(search_results);
@@ -234,7 +258,16 @@ async function draw_geometry(conn, pane, id) {
     }
 
     var geom_layer = L.geoJSON(geom);
-    geom_layer.addTo(map);
+    geom_layer.addTo(map, { 'pane': pane });
+
+    switch (pane){
+	case "localities":
+	    locality_layers.push(geom_layer);
+	    break;
+	case "neighbourhoods":
+	    neighbourhood_layers.push(geom_layer);
+	    break;
+    }
 }
 
 async function draw_search_results(search_results) {
@@ -283,22 +316,65 @@ async function draw_search_results(search_results) {
 	}
 	
 	features.push(f);
-	
+
 	var item = document.createElement("li");
+	item.setAttribute("id", row.id);
+	item.setAttribute("class", "venue");
 	
-	item.appendChild(document.createTextNode(row.name));
-	item.appendChild(document.createElement("br"));
-	item.appendChild(document.createTextNode(row.address + ", " + row.locality));
+	var name = document.createElement("div");
+	name.setAttribute("class", "venue-name");
+	name.appendChild(document.createTextNode(row.name));
+	item.appendChild(name);
+	
+	var loc_els = [];
+	
+	if (row.address){
+	    loc_els.push(row.address);
+	}
+
+	if (row.locality){
+	    loc_els.push(row.locality);
+	}
+
+	if (loc_els.length > 0){
+	    var loc = document.createElement("div");
+	    loc.setAttribute("id", row.id);
+	    loc.setAttribute("class", "venue-location");
+	    
+	    loc.appendChild(document.createTextNode(loc_els.join(", ")));
+	    item.appendChild(loc);
+	}
+
 	item.appendChild(document.createElement("br"));
 	
 	if (row.categories){
-	    item.appendChild(document.createTextNode(row.categories));
+
+	    var categories_list = JSON.parse(row.categories);
+	    
+	    var categories_ul = document.createElement("ul");
+	    categories_ul.setAttribute("class", "venue-categories");
+
+	    for (var c in categories_list){
+
+		var categories_li = document.createElement("li");
+		categories_li.appendChild(document.createTextNode(categories_list[c]));
+		categories_ul.appendChild(categories_li);
+	    }
+	    
+	    item.appendChild(categories_ul);
 	}
+
+	name.onclick = function(e){
+	    var el = e.target;
+	    var id = el.getAttribute("id");
+	    console.log("CLICK", el, id);
+	};
 	
 	list_el.appendChild(item);
     }
     
-    var markers_style = {
+    var circle_opts = {
+	pane: "markers",
 	radius: 8,
 	fillColor: "#ff7800",
 	color: "#000",
@@ -309,7 +385,7 @@ async function draw_search_results(search_results) {
     
     var markers_opts = {
 	pointToLayer: function (feature, latlng) {
-	    return L.circleMarker(latlng, markers_style);
+	    return L.circleMarker(latlng, circle_opts);
 	}
     };
 
@@ -326,6 +402,11 @@ async function draw_search_results(search_results) {
 	
 	var bounds = whosonfirst.spelunker.geojson.derive_bounds(fc);
 	map.fitBounds(bounds);
+	
+    } else {
+
+	var coords = features[0].geometry.coordinates;
+	map.setView([coords[1], coords[0]], 15);
     }
     
     results_el.appendChild(list_el);
