@@ -317,13 +317,23 @@ async function draw_search_results(search_results) {
 	
 	features.push(f);
 
+	var popup_func = function(e){
+	    var el = e.target;
+	    var id = el.getAttribute("data-id");
+	    console.log("click", el, id);
+	    return false;
+	};
+	
 	var item = document.createElement("li");
 	item.setAttribute("id", row.id);
 	item.setAttribute("class", "venue");
 	
 	var name = document.createElement("div");
+	name.setAttribute("data-id", row.id);	
 	name.setAttribute("class", "venue-name");
 	name.appendChild(document.createTextNode(row.name));
+	name.onclick = popup_func;
+	
 	item.appendChild(name);
 	
 	var loc_els = [];
@@ -337,16 +347,16 @@ async function draw_search_results(search_results) {
 	}
 
 	if (loc_els.length > 0){
-	    var loc = document.createElement("div");
-	    loc.setAttribute("id", row.id);
-	    loc.setAttribute("class", "venue-location");
 	    
+	    var loc = document.createElement("div");
+	    loc.setAttribute("data-id", row.id);
+	    loc.setAttribute("class", "venue-location");
 	    loc.appendChild(document.createTextNode(loc_els.join(", ")));
+	    loc.onclick = popup_func;
+	    
 	    item.appendChild(loc);
 	}
 
-	item.appendChild(document.createElement("br"));
-	
 	if (row.categories){
 
 	    var categories_list = JSON.parse(row.categories);
@@ -363,12 +373,6 @@ async function draw_search_results(search_results) {
 	    
 	    item.appendChild(categories_ul);
 	}
-
-	name.onclick = function(e){
-	    var el = e.target;
-	    var id = el.getAttribute("id");
-	    console.log("CLICK", el, id);
-	};
 	
 	list_el.appendChild(item);
     }
