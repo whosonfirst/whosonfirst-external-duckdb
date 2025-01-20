@@ -5,6 +5,7 @@ var base_layer;
 var markers_layer;
 var locality_layers = [];
 var neighbourhood_layers = [];
+var popups = {};
 
 var dt_formatter;
 var num_formatter;
@@ -81,6 +82,7 @@ async function start(db){
     base_layer.addTo(map);
 
     const panes = {
+	"popups": 4000,
 	"markers": 3000,
 	"neighbourhoods": 2000,
 	"localities": 1000,
@@ -114,6 +116,8 @@ async function start(db){
 	
 	if (markers_layer){
 	    map.removeLayer(markers_layer);
+	    markers_layer = null;
+	    popups = {};	    
 	}
 
 	for (var i in neighbourhood_layers){
@@ -318,9 +322,17 @@ async function draw_search_results(search_results) {
 	features.push(f);
 
 	var popup_func = function(e){
+	    
 	    var el = e.target;
 	    var id = el.getAttribute("data-id");
-	    console.log("click", el, id);
+
+	    var p = popups[id];
+
+	    if (p){
+		console.log("TOGGLE");
+		p.togglePopup();
+	    }
+	    
 	    return false;
 	};
 	
@@ -390,7 +402,29 @@ async function draw_search_results(search_results) {
     var markers_opts = {
 	pointToLayer: function (feature, latlng) {
 	    return L.circleMarker(latlng, circle_opts);
-	}
+	},
+	onEachFeature: function (feature, layer) {
+
+	    var id = feature.properties.id;
+	    
+	    var popup = L.popup({
+		pane: "popups",
+	    });
+
+	    popup.setContent(function(){
+
+		var el = document.getElementById(id);
+
+		if (el){
+		    // https://developer.mozilla.org/en-US/docs/Web/API/Element/scrollIntoView		    
+		    el.scrollIntoView();
+		}
+		
+		return feature.properties.name
+	    });	   	    
+	    
+	    popups[id] = layer.bindPopup(popup);
+	},
     };
 
     
@@ -408,9 +442,8 @@ async function draw_search_results(search_results) {
 	map.fitBounds(bounds);
 	
     } else {
-
 	var coords = features[0].geometry.coordinates;
-	map.setView([coords[1], coords[0]], 15);
+	map.setView([coords[1], coords[0]], 14);
     }
     
     results_el.appendChild(list_el);
