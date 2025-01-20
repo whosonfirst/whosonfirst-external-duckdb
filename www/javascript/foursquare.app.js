@@ -10,8 +10,29 @@ var popups = {};
 var dt_formatter;
 var num_formatter;
 
+var foursquare_venues_url;
+var whosonfirst_properties_url;
+var pmtiles_data_url;
+
 async function start(db){
 
+    var foursquare_venues = document.body.getAttribute("data-foursquare-venues");
+    var whosonfirst_properties = document.body.getAttribute("data-whosonfirst-properties");
+    var pmtiles_data = document.body.getAttribute("data-pmtiles");        
+
+    var foursquare_url = new URL("http://localhost:8080");
+    foursquare_url.pathname = "/data/" + foursquare_venues;
+
+    var whosonfirst_url = new URL("http://localhost:8080");
+    whosonfirst_url.pathname = "/data/" + whosonfirst_properties;
+
+    var pmtiles_url = new URL("http://localhost:8080");
+    pmtiles_url.pathname = "/pmtiles/" + pmtiles_data;
+    
+    foursquare_venues_url = foursquare_url.toString();
+    whosonfirst_properties_url = whosonfirst_url.toString();
+    pmtiles_data_url = pmtiles_url.toString();
+    
     var fb = document.getElementById("feedback");
     
     var query_el = document.getElementById("q");
@@ -48,10 +69,10 @@ async function start(db){
     var max_y;
     
     try {
-	const minx_r = await conn.query("SELECT longitude FROM read_parquet('http://localhost:8080/data/sfba-foursquare.parquet') ORDER by longitude ASC LIMIT 1");
-	const miny_r = await conn.query("SELECT latitude FROM read_parquet('http://localhost:8080/data/sfba-foursquare.parquet') ORDER by latitude ASC LIMIT 1");
-	const maxx_r = await conn.query("SELECT longitude FROM read_parquet('http://localhost:8080/data/sfba-foursquare.parquet') ORDER by longitude DESC LIMIT 1");
-	const maxy_r = await conn.query("SELECT latitude FROM read_parquet('http://localhost:8080/data/sfba-foursquare.parquet') ORDER by latitude DESC LIMIT 1");	   
+	const minx_r = await conn.query("SELECT longitude FROM read_parquet('" + foursquare_venues_url + "') ORDER by longitude ASC LIMIT 1");
+	const miny_r = await conn.query("SELECT latitude FROM read_parquet('" + foursquare_venues_url + "') ORDER by latitude ASC LIMIT 1");
+	const maxx_r = await conn.query("SELECT longitude FROM read_parquet('" + foursquare_venues_url + "') ORDER by longitude DESC LIMIT 1");
+	const maxy_r = await conn.query("SELECT latitude FROM read_parquet('" + foursquare_venues_url + "') ORDER by latitude DESC LIMIT 1");	   
 	
 	min_x = minx_r.toArray()[0].longitude;
 	min_y = miny_r.toArray()[0].latitude;
@@ -73,9 +94,7 @@ async function start(db){
     map.fitBounds(bounds);
         
     base_layer = protomapsL.leafletLayer({
-	url:'http://localhost:8080/pmtiles/sfba.pmtiles',
-	// go run main.go serve /usr/local/whosonfirst/whosonfirst-external-duckdb/www/pmtiles --port=8081 --cors="*"
-	// url:'http://localhost:8081/sfba/{z}/{x}/{y}.mvt',	       
+	url: pmtiles_data_url,	// 'http://localhost:8080/pmtiles/sfba.pmtiles',
 	theme:"white"
     });
     
@@ -99,7 +118,7 @@ async function start(db){
     
     fb.innerText = "Setting up search table";
     
-    await conn.query("CREATE TABLE search AS SELECT fsq_place_id AS id, name, address, JSON_EXTRACT(\"wof:hierarchies\", '$[0].locality_id') AS locality_id, JSON_EXTRACT(\"wof:hierarchies\", '$[0].neighbourhood_id') AS neighbourhood_id FROM read_parquet('http://localhost:8080/data/sfba-foursquare.parquet')");
+    await conn.query("CREATE TABLE search AS SELECT fsq_place_id AS id, name, address, JSON_EXTRACT(\"wof:hierarchies\", '$[0].locality_id') AS locality_id, JSON_EXTRACT(\"wof:hierarchies\", '$[0].neighbourhood_id') AS neighbourhood_id FROM read_parquet('" + foursquare_venues_url + "')");
     
     fb.innerText = "Indexing search table";	   
     
@@ -240,7 +259,7 @@ async function do_search(conn){
 	ids_list.push("'" + row.id + "'");
     }
     
-    const search_results = await conn.query("SELECT fsq_place_id AS id, name, address, locality, JSON(fsq_category_labels) AS categories, latitude, longitude FROM read_parquet('http://localhost:8080/data/sfba-foursquare.parquet') WHERE fsq_place_id IN ( " + ids_list.join(",") + ") AND date_closed IS NULL");
+    const search_results = await conn.query("SELECT fsq_place_id AS id, name, address, locality, JSON(fsq_category_labels) AS categories, latitude, longitude FROM read_parquet('" + foursquare_venues_url + "') WHERE fsq_place_id IN ( " + ids_list.join(",") + ") AND date_closed IS NULL");
 
     if ((locality_id) && (locality_id != -1)){
 	draw_geometry(conn, "localities", locality_id);
@@ -369,6 +388,13 @@ async function draw_search_results(search_results) {
 	    item.appendChild(loc);
 	}
 
+	/*
+
+	    Dining and Drinking > Restaurant > Asian Restaurant > Japanese Restaurant
+	    Dining and Drinking > Restaurant > Asian Restaurant
+            Dining and Drinking > Restaurant > Asian Restaurant > Korean Restaurant
+	*/
+	
 	if (row.categories){
 
 	    var categories_list = JSON.parse(row.categories);
@@ -471,10 +497,10 @@ async function fetch_localities(conn){
     
     // Wut: The first query triggers the following error:
     // DuckDB: Error: Binder Error: Cannot extract field 'locality_id' from expression "array_extract(CAST(json_extract(wof:hierarchies, '$') AS VARCHAR), CAST(0 AS BIGINT))" because it is not a struct or a union
-    // const locality_results = await conn.query("SELECT DISTINCT(JSON(\"wof:hierarchies\")[0].locality_id) FROM read_parquet('http://localhost:8080/data/sfba-foursquare.parquet')");
+    // const locality_results = await conn.query("SELECT DISTINCT(JSON(\"wof:hierarchies\")[0].locality_id) FROM read_parquet('" + foursquare_venues_url + "')");
     
     // This however works...
-    const locality_results = await conn.query("SELECT DISTINCT(JSON_EXTRACT_STRING(\"wof:hierarchies\", '$[0].locality_id')) AS locality_id FROM read_parquet('http://localhost:8080/data/sfba-foursquare.parquet')");
+    const locality_results = await conn.query("SELECT DISTINCT(JSON_EXTRACT_STRING(\"wof:hierarchies\", '$[0].locality_id')) AS locality_id FROM read_parquet('" + foursquare_venues_url + "')");
     
     var locality_onchange = async function(e){
 	var el = e.target;
@@ -500,7 +526,7 @@ async function fetch_localities(conn){
 
     var str_ids = locality_ids.join(",");
 
-    const names_results = await conn.query("SELECT id, name, FROM read_parquet('http://localhost:8080/data/sfba-whosonfirst.parquet') WHERE id IN (" + str_ids + ")");
+    const names_results = await conn.query("SELECT id, name, FROM read_parquet('" + whosonfirst_properties_url + "') WHERE id IN (" + str_ids + ")");
 
     for (const row of names_results){
 	locality_names[row.id] = row.name;
@@ -530,7 +556,7 @@ async function fetch_neighbourhoods(conn, locality_id) {
     
     fb.innerText = "Fetching neighbourhoods";
     
-    const neighbourhood_results = await conn.query("SELECT DISTINCT(JSON_EXTRACT_STRING(\"wof:hierarchies\", '$[0].neighbourhood_id')) AS neighbourhood_id FROM read_parquet('http://localhost:8080/data/sfba-foursquare.parquet') WHERE JSON_EXTRACT(\"wof:hierarchies\", '$[0].locality_id') = '" + locality_id + "'");
+    const neighbourhood_results = await conn.query("SELECT DISTINCT(JSON_EXTRACT_STRING(\"wof:hierarchies\", '$[0].neighbourhood_id')) AS neighbourhood_id FROM read_parquet('" + foursquare_venues_url + "') WHERE JSON_EXTRACT(\"wof:hierarchies\", '$[0].locality_id') = '" + locality_id + "'");
     
     var neighbourhood_names = {};	
     var neighbourhood_ids = [];
@@ -552,7 +578,7 @@ async function fetch_neighbourhoods(conn, locality_id) {
     
     var str_ids = neighbourhood_ids.join(",");
     
-    const names_results = await conn.query("SELECT id, name  FROM read_parquet('http://localhost:8080/data/sfba-whosonfirst.parquet') WHERE id IN (" + str_ids + ")");
+    const names_results = await conn.query("SELECT id, name  FROM read_parquet('" + whosonfirst_properties_url + "') WHERE id IN (" + str_ids + ")");
     
     for (const row of names_results){
 	neighbourhood_names[row.id] = row.name;
@@ -569,7 +595,7 @@ async function fetch_neighbourhoods(conn, locality_id) {
 
 async function fetch_categories(conn, placetype, wof_id) {
 
-    // SELECT fsq_category_ids, fsq_category_labels FROM read_parquet('http://localhost:8080/data/sfba-foursquare.parquet') WHERE JSON("wof:hierarchies")[0].locality_id = '85921881' GROUP BY fsq_category_ids, fsq_category_labels ORDER BY fsq_category_labels;
+    // SELECT fsq_category_ids, fsq_category_labels FROM read_parquet('" + foursquare_venues_url + "') WHERE JSON("wof:hierarchies")[0].locality_id = '85921881' GROUP BY fsq_category_ids, fsq_category_labels ORDER BY fsq_category_labels;
 
 }
 
@@ -577,7 +603,7 @@ async function get_geometry(conn, id) {
 
     try {
 	
-	const results = await conn.query("SELECT geometry FROM read_parquet('http://localhost:8080/data/sfba-whosonfirst.parquet') WHERE id = '" + id + "'");
+	const results = await conn.query("SELECT geometry FROM read_parquet('" + whosonfirst_properties_url + "') WHERE id = '" + id + "'");
 	const row = results.get(0)
 
 	if (! row){
