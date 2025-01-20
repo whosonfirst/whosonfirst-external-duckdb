@@ -205,7 +205,6 @@ function draw_names(select_el, names_table, onchange_cb) {
 	    select_el.appendChild(opt);
 	}
     }
-
     
     if (onchange_cb) {
 	select_el.onchange = onchange_cb;
@@ -396,7 +395,31 @@ async function draw_search_results(search_results) {
 	*/
 	
 	if (row.categories){
+	    
+	    var categories_list = JSON.parse(row.categories);
+	    var foo = {};
 
+	    for (var c in categories_list){
+
+		var parts = categories_list[c].split(" > ");
+		var count = parts.length;
+
+		for (var p=0; p < count; p++){
+
+		    var label = parts[p];
+		    var keys = parts.slice(0, p);
+
+		    // var str_key = keys.join(" > ");
+		    
+		    console.log("DEBUG", keys, label);
+		}
+		
+	    }
+	    
+	}
+	
+	if (row.categories){
+	    
 	    var categories_list = JSON.parse(row.categories);
 	    
 	    var categories_ul = document.createElement("ul");
