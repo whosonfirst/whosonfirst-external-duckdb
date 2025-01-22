@@ -1,5 +1,7 @@
 export { start };
 
+var conn;
+
 var map;
 var base_layer;
 var markers_layer;
@@ -13,6 +15,8 @@ var num_formatter;
 var foursquare_venues_url;
 var whosonfirst_properties_url;
 var pmtiles_data_url;
+
+var filters = {};
 
 async function start(db){
 
@@ -52,7 +56,7 @@ async function start(db){
         
     fb.innerText = "Connecting to database";
     
-    const conn = await db.connect();
+    conn = await db.connect();
     
     fb.innerText = "Setting up map";   
     
@@ -150,7 +154,7 @@ async function start(db){
 	neighbourhood_layers = [];
 	locality_layers = [];
 	
-	do_search(conn);
+	do_search();
 	return false;
     };
     
@@ -211,7 +215,7 @@ function draw_names(select_el, names_table, onchange_cb) {
     }
 }
 
-async function do_search(conn){
+async function do_search(){
 
     var fb = document.getElementById("feedback");
     
@@ -397,42 +401,81 @@ async function draw_search_results(search_results) {
 	if (row.categories){
 	    
 	    var categories_list = JSON.parse(row.categories);
-	    var foo = {};
+	    var categories_dict = buildCetgoriesDictionary(categories_list);
+	    
+	    var breadcrumbs = [];
+	    
+	    var render = function(dict){
 
-	    for (var c in categories_list){
+		for (const k in dict){
 
-		var parts = categories_list[c].split(" > ");
-		var count = parts.length;
-
-		for (var p=0; p < count; p++){
-
-		    var label = parts[p];
-		    var keys = parts.slice(0, p);
-
-		    // var str_key = keys.join(" > ");
+		    const v = dict[k];
 		    
-		    console.log("DEBUG", keys, label);
+		    if (! v){
+
+			var categories_ul = document.createElement("ul");
+			categories_ul.setAttribute("class", "venue-categories");
+			
+			var to_render = breadcrumbs;
+			to_render.push(k);
+
+			var render_count = to_render.length;
+			
+			for (var r=0; r < render_count; r++){
+
+			    var anchor = document.createElement("a");
+			    anchor.setAttribute("href", "#");
+			    anchor.setAttribute("data-categories", to_render.slice(0, r + 1).join(" > "));
+			    anchor.appendChild(document.createTextNode(to_render[r]));
+
+			    anchor.onclick = function(e){
+
+				var el = e.target;
+				var categories = el.getAttribute("data-categories");
+
+				if (! categories){
+				    console.error("Element is missing data-categories attribute", el);
+				    return false;
+				}
+
+				var add_filter = true;
+
+				for (var k in filters){
+
+				    if (k.startsWith(categories)){
+					// console.log("WOMP", k, categories);
+					add_filter = false;
+					break;
+				    }
+				}
+				
+				if (add_filter){
+				    filters[categories] = true;
+				    draw_filters();
+				    do_search();
+				}
+				
+				return false;
+			    };
+			    
+			    var categories_li = document.createElement("li");
+			    categories_li.appendChild(anchor);
+			    categories_ul.appendChild(categories_li);
+			}
+
+			item.appendChild(categories_ul);
+    			
+			console.log(row.id, breadcrumbs, k);
+			continue;
+		    }
+		    
+		    breadcrumbs.push(k);
+		    render(v);
+		    breadcrumbs.pop();
 		}
-		
-	    }
-	    
-	}
-	
-	if (row.categories){
-	    
-	    var categories_list = JSON.parse(row.categories);
-	    
-	    var categories_ul = document.createElement("ul");
-	    categories_ul.setAttribute("class", "venue-categories");
+	    };
 
-	    for (var c in categories_list){
-
-		var categories_li = document.createElement("li");
-		categories_li.appendChild(document.createTextNode(categories_list[c]));
-		categories_ul.appendChild(categories_li);
-	    }
-	    
-	    item.appendChild(categories_ul);
+	    render(categories_dict);
 	}
 	
 	list_el.appendChild(item);
@@ -642,12 +685,73 @@ async function get_geometry(conn, id) {
     }
 }
 
-function buildPrefixDictionary(arr) {
+function draw_filters() {
 
-	function addPathToTree(tree, path) {
+    var wrapper_el = document.getElementById("filters-wrapper");
+    var filters_el = document.getElementById("filters");    
+
+    filters_el.innerHTML = "";
+    
+    var categories = [];
+
+    for (var k in filters){
+	categories.push(k);
+    }
+
+    if (categories.length == 0){
+	wrapper_el.style.display = "none";
+	return;
+    }
+
+    categories.sort();
+
+    for (var i in categories){
+
+	var rm = document.createElement("span");
+	rm.setAttribute("class", "remove");
+	rm.setAttribute("data-categories", categories[i]);
+	rm.appendChild(document.createTextNode("[x]"));
+
+	rm.onclick = function(e){
+
+	    var el = e.target;
+	    var categories = el.getAttribute("data-categories");
+
+	    if (! categories){
+		console.error("Element is missing data-categories", el);
+		return false;
+	    }
+
+	    if (! filters[categories]){
+		console.warn("Filter is missing key", categories);
+		return false;
+	    }
+
+	    delete(filters[categories]);
+	    draw_filters();
+	    do_search();
+	    
+	    return false;
+	};
+	
+	var item = document.createElement("li");
+	item.appendChild(document.createTextNode(categories[i]));
+	item.appendChild(rm);
+	
+	filters_el.appendChild(item);
+    }
+
+    wrapper_el.style.display = "block";
+}
+
+    
+function buildCetgoriesDictionary(categories) {
+
+    function addPathToTree(tree, path) {
+	
         const parts = path.split(' > ');
         let currentLevel = tree;
-
+	
         for (let i = 0; i < parts.length; i++) {
             const part = parts[i];
             if (!currentLevel[part]) {
@@ -657,11 +761,9 @@ function buildPrefixDictionary(arr) {
         }
     }
 
-    // Initialize the dictionary tree
-    const prefixDictionary = {};
+    const categoriesDictionary = {};
 
-    // Iterate through the array and build the tree
-    arr.forEach(path => addPathToTree(prefixDictionary, path));
+    categories.forEach(path => addPathToTree(categoriesDictionary, path));
 
-    return prefixDictionary;
+    return categoriesDictionary;
 }

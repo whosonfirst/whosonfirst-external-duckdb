@@ -68,6 +68,25 @@
 	
 .venue-categories li {
 	list-style-type: none;
+	display: inline;
+}
+
+.venue-categories li:after {
+	content: " > ";
+}
+
+.venue-categories li:last-child:after {
+	content: "" !important;
+}
+
+.remove {
+	color: red;
+	margin-left: .25rem;
+}
+
+
+#filters-wrapper {
+	display:none;
 }
 
 @media (min-width: 320px) and (max-width: 768px) {
