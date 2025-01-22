@@ -641,3 +641,27 @@ async function get_geometry(conn, id) {
 	console.error("Failed to get geometry for feature", id, err);
     }
 }
+
+function buildPrefixDictionary(arr) {
+
+	function addPathToTree(tree, path) {
+        const parts = path.split(' > ');
+        let currentLevel = tree;
+
+        for (let i = 0; i < parts.length; i++) {
+            const part = parts[i];
+            if (!currentLevel[part]) {
+                currentLevel[part] = i === parts.length - 1 ? null : {};
+            }
+            currentLevel = currentLevel[part];
+        }
+    }
+
+    // Initialize the dictionary tree
+    const prefixDictionary = {};
+
+    // Iterate through the array and build the tree
+    arr.forEach(path => addPathToTree(prefixDictionary, path));
+
+    return prefixDictionary;
+}
