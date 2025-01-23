@@ -6,6 +6,8 @@
 #q {
 	width: auto !important;
 	display: inline-block !important;
+	max-width: 65%;
+	
 }
 
 #submit {
@@ -115,8 +117,5 @@
 		padding: none;		
 	}
 
-	#q {
-		max-width: 65vw;
-	}
 }
 

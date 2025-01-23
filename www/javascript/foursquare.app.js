@@ -18,6 +18,8 @@ var pmtiles_data_url;
 
 var filters = {};
 
+// D SELECT DISTINCT(JSON_EXTRACT_STRING(fsq_category_labels, '$[*]')) AS category FROM read_parquet('www/data/sfba-foursquare.parquet') ORDER BY category ASC;
+
 async function start(db){
 
     var foursquare_venues = document.body.getAttribute("data-foursquare-venues");
@@ -121,12 +123,15 @@ async function start(db){
     fetch_localities(conn);
     
     fb.innerText = "Setting up search table";
+
+    // Borough?
+    // Macrohood?
     
-    await conn.query("CREATE TABLE search AS SELECT fsq_place_id AS id, name, address, JSON_EXTRACT(\"wof:hierarchies\", '$[0].locality_id') AS locality_id, JSON_EXTRACT(\"wof:hierarchies\", '$[0].neighbourhood_id') AS neighbourhood_id FROM read_parquet('" + foursquare_venues_url + "')");
+    await conn.query("CREATE TABLE search AS SELECT fsq_place_id AS id, name, address, JSON_EXTRACT_STRING(fsq_category_labels, '$[*]') AS categories, JSON_EXTRACT(\"wof:hierarchies\", '$[0].locality_id') AS locality_id, JSON_EXTRACT(\"wof:hierarchies\", '$[0].neighbourhood_id') AS neighbourhood_id FROM read_parquet('" + foursquare_venues_url + "')");
     
     fb.innerText = "Indexing search table";	   
     
-    await conn.query("PRAGMA create_fts_index('search', 'id', 'name', 'address', 'locality_id', 'neighbourhood_id')");
+    await conn.query("PRAGMA create_fts_index('search', 'id', 'name', 'address', 'categories', 'locality_id', 'neighbourhood_id')");
     
     fb.innerText = "Ready to search";
     
@@ -136,23 +141,6 @@ async function start(db){
     neighbourhood_el.removeAttribute("disabled");	   	   
     
     button_el.onclick = async function(e){
-	
-	if (markers_layer){
-	    map.removeLayer(markers_layer);
-	    markers_layer = null;
-	    popups = {};	    
-	}
-
-	for (var i in neighbourhood_layers){
-	    map.removeLayer(neighbourhood_layers[i]);
-	}
-
-	for (var i in locality_layers){
-	    map.removeLayer(locality_layers[i]);
-	}
-	
-	neighbourhood_layers = [];
-	locality_layers = [];
 	
 	do_search();
 	return false;
@@ -217,12 +205,34 @@ function draw_names(select_el, names_table, onchange_cb) {
 
 async function do_search(){
 
+    // Purge the map
+    
+    if (markers_layer){
+	map.removeLayer(markers_layer);
+	markers_layer = null;
+	popups = {};	    
+    }
+    
+    for (var i in neighbourhood_layers){
+	map.removeLayer(neighbourhood_layers[i]);
+    }
+    
+    for (var i in locality_layers){
+	map.removeLayer(locality_layers[i]);
+    }
+    
+    neighbourhood_layers = [];
+    locality_layers = [];
+    
+    // Set up DOM elements
+    
     var fb = document.getElementById("feedback");
     
     var query_el = document.getElementById("q");
     var locality_el = document.getElementById("locality");
     var neighbourhood_el = document.getElementById("neighbourhood");	   	   
     var results_el = document.getElementById("results");
+    var filters_el = document.getElementById("filters");
     
     results_el.innerText = "";
     
@@ -261,8 +271,42 @@ async function do_search(){
     for (const row of ids_results) {
 	ids_list.push("'" + row.id + "'");
     }
+
+    var results_where = [
+	"fsq_place_id IN ( " + ids_list.join(",") + ")",
+	"date_closed IS NULL",
+    ];
+
+    var count_filters = filters_el.childElementCount;
     
-    const search_results = await conn.query("SELECT fsq_place_id AS id, name, address, locality, JSON(fsq_category_labels) AS categories, latitude, longitude FROM read_parquet('" + foursquare_venues_url + "') WHERE fsq_place_id IN ( " + ids_list.join(",") + ") AND date_closed IS NULL");
+    if (count_filters){
+
+	var categories = [];
+	
+	for (var i=0; i < count_filters; i++){
+
+	    var f = filters_el.children[i];
+	    var c = f.getAttribute("data-categories");
+	    
+	    if (! c){
+		continue;
+	    }
+
+	    categories.push("categories LIKE '%" + c + "%'");
+	}
+
+	if (categories.length){
+	    results_where.push("(" + categories.join(" OR ") + ")");
+	}
+    }
+
+    console.log("WHERE", results_where);
+    
+    var str_results_where = results_where.join(" AND ");
+
+    console.log("WHERE", str_results_where);
+    
+    const search_results = await conn.query("SELECT fsq_place_id AS id, name, address, locality, JSON(fsq_category_labels) AS categories, latitude, longitude FROM read_parquet('" + foursquare_venues_url + "') WHERE " + str_results_where);
 
     if ((locality_id) && (locality_id != -1)){
 	draw_geometry(conn, "localities", locality_id);
@@ -443,7 +487,6 @@ async function draw_search_results(search_results) {
 				for (var k in filters){
 
 				    if (k.startsWith(categories)){
-					// console.log("WOMP", k, categories);
 					add_filter = false;
 					break;
 				    }
@@ -465,7 +508,7 @@ async function draw_search_results(search_results) {
 
 			item.appendChild(categories_ul);
     			
-			console.log(row.id, breadcrumbs, k);
+			// console.log(row.id, breadcrumbs, k);
 			continue;
 		    }
 		    
@@ -523,19 +566,22 @@ async function draw_search_results(search_results) {
     markers_layer = L.geoJSON(features, markers_opts);
     markers_layer.addTo(map);
 
-    if (features.length > 1){
-
-	var fc = {
-	    'type': 'FeatureCollection',
-	    'features': features,
-	};
-	
-	var bounds = whosonfirst.spelunker.geojson.derive_bounds(fc);
-	map.fitBounds(bounds);
-	
-    } else {
-	var coords = features[0].geometry.coordinates;
-	map.setView([coords[1], coords[0]], 14);
+    switch (features.length){
+	case 0:
+	    break;
+	case 1:
+	    var coords = features[0].geometry.coordinates;
+	    map.setView([coords[1], coords[0]], 14);
+	    break;
+	default:
+	    var fc = {
+		'type': 'FeatureCollection',
+		'features': features,
+	    };
+	    
+	    var bounds = whosonfirst.spelunker.geojson.derive_bounds(fc);
+	    map.fitBounds(bounds);
+	    break;
     }
     
     results_el.appendChild(list_el);
@@ -708,8 +754,8 @@ function draw_filters() {
     for (var i in categories){
 
 	var rm = document.createElement("span");
+	rm.setAttribute("data-categories", categories[i]);		
 	rm.setAttribute("class", "remove");
-	rm.setAttribute("data-categories", categories[i]);
 	rm.appendChild(document.createTextNode("[x]"));
 
 	rm.onclick = function(e){
@@ -736,6 +782,7 @@ function draw_filters() {
 	
 	var item = document.createElement("li");
 	item.appendChild(document.createTextNode(categories[i]));
+	item.setAttribute("data-categories", categories[i]);	
 	item.appendChild(rm);
 	
 	filters_el.appendChild(item);
