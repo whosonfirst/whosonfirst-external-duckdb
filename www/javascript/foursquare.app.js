@@ -26,13 +26,15 @@ async function start(db){
     var whosonfirst_properties = document.body.getAttribute("data-whosonfirst-properties");
     var pmtiles_data = document.body.getAttribute("data-pmtiles");        
 
-    var foursquare_url = new URL("http://localhost:8080");
+    var root_url = location.protocol + "//" + location.host;
+    
+    var foursquare_url = new URL(root_url);
     foursquare_url.pathname = "/data/" + foursquare_venues;
 
-    var whosonfirst_url = new URL("http://localhost:8080");
+    var whosonfirst_url = new URL(root_url);
     whosonfirst_url.pathname = "/data/" + whosonfirst_properties;
 
-    var pmtiles_url = new URL("http://localhost:8080");
+    var pmtiles_url = new URL(root_url);
     pmtiles_url.pathname = "/pmtiles/" + pmtiles_data;
     
     foursquare_venues_url = foursquare_url.toString();
