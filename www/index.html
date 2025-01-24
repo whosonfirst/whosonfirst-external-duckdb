@@ -7,22 +7,37 @@
     <link rel="stylesheet" type="text/css" href="./css/bootstrap.min.css" />
   </head>
   <body>
+      <div id="feedback"></div>
       <ul>
 	  <li><a href="./foursquare/">foursquare</a></li>
       </ul>
-      <button id="purge" class="button">Purge offline cache</button>
+      <button id="init" class="btn btn-primary">Initialize offline cache</button>      
+      <button id="purge" class="btn btn-primary">Purge offline cache</button>
   </body>
   <script type="text/javascript" src="javascript/offline.js"></script>
   <script type="text/javascript">
+
+   var feedback_el = document.getElementById("feedback");
+   var init_el = document.getElementById("init");   
+   var purge_el = document.getElementById("purge");
    
-   var el = document.getElementById("purge");
-   
-   el.onclick = function(){
-       offline.purge_with_confirmation;
+   purge_el.onclick = function(){
+       offline.purge_with_confirmation();
        return false;
    };
 
+   init_el.onclick = function(){
+       
+       offline.init().then((rsp) => {
+	   feedback_el.innerText = "Offline cache registered";
+       }).catch((err) => {
+	   feedback_el.innerText = "Failed to register offline cache, " + err;
+       });
+       ;
+       return false;
+   };
+   
    console.log("init");
-   offline.init();
+   // offline.init();
   </script>
 </html>

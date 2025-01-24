@@ -11,9 +11,13 @@ var offline = (function(){
 	
 	init: function(scope){
 
-	    console.log("hello");
-	    if ("serviceWorker" in navigator) {
-
+	    return new Promise((resolve, reject) => {
+		
+		if (! "serviceWorker" in navigator) {
+		    reject("Service workers not available");
+		    return
+		}
+		
 		console.log("world");		
 		var sw_uri = "sw.js";
 		
@@ -21,14 +25,18 @@ var offline = (function(){
 		    scope: scope,
 		};
 		
-		navigator.serviceWorker.register(sw_uri, sw_args).then((registration) => {
-		    console.log("sw registered");
-		    registration.update();
-		}).catch((err) => {
-		    console.log("SAD", err);
-		});
+		navigator.serviceWorker.register(sw_uri, sw_args)
+			 .then((registration) => {
+			     console.log("sw registered");
+			     registration.update();
+			     resolve();
+			 }).catch((err) => {
+			     console.error("Failed to register service worker", err);
+			     reject(err);
+			 });
 		
-	    }
+	    });
+	    
 	},
 
 	purge_with_confirmation: function(){
@@ -55,7 +63,7 @@ var offline = (function(){
 
                 return Promise.all(cachesNames.map(function (cacheName) {
 
-		    if (! cacheName.startsWith("fingerprint-")){
+		    if (! cacheName.startsWith("sfba-")){
 			return Promise.resolve();
 		    }
 		    
@@ -66,10 +74,8 @@ var offline = (function(){
                 
             }).then(function () {
                 console.log("All " + document.defaultView.location.origin + " caches are deleted");
-                fingerprint.feedback.success("All caches have been deleted.");		
             }).catch((err) => {
 		console.log("Failed to remove caches, ",err);
-		fingerprint.feedback.error("Failed to remove caches, " + err);
 	    });  
 	},
     };
