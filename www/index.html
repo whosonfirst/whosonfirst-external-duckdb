@@ -29,7 +29,7 @@
    init_el.onclick = function(){
        
        offline.init().then((rsp) => {
-	   feedback_el.innerText = "Offline cache registered";
+	   feedback_el.innerText = "Offline cache registered";	   
        }).catch((err) => {
 	   feedback_el.innerText = "Failed to register offline cache, " + err;
        });

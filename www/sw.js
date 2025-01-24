@@ -54,18 +54,22 @@ self.addEventListener("install", (e) => {
     })());
 });
 
-addEventListener("activate", (event) => {
+self.addEventListener("activate", (event) => {
     console.log("SW activate", cache_name);
 });
 
-addEventListener("message", (event) => {
+self.addEventListener("message", (event) => {
     // event is a MessageEvent object
     console.log(`The service worker sent me a message: ${event.data}`);
   });
 
 
+// https://developer.mozilla.org/en-US/docs/Web/API/FetchEvent
+
 self.addEventListener('fetch', (e) => {
 
+    console.log("FETCH", e);
+    
     // https://developer.mozilla.org/en-US/docs/Web/API/Cache
     
     e.respondWith((async () => {
