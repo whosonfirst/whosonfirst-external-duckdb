@@ -65,12 +65,17 @@ self.addEventListener("message", (event) => {
 
 
 // https://developer.mozilla.org/en-US/docs/Web/API/FetchEvent
+// https://gist.github.com/bakoushin/8171c66e1514f9b6588e1d76d5b4bd77
 
 self.addEventListener('fetch', (e) => {
 
     console.log("FETCH", e);
     
     // https://developer.mozilla.org/en-US/docs/Web/API/Cache
+
+    // Fails here with...
+    // Failed to load ‘https://localhost:8080/data/sfba-foursquare.parquet’.
+    // A ServiceWorker passed a promise to FetchEvent.respondWith() that rejected with ‘TypeError: NetworkError when attempting to fetch resource.’.
     
     e.respondWith((async () => {
 
