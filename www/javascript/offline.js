@@ -3,16 +3,18 @@
 /* https://web.dev/learn/pwa/service-workers/ */
 /* https://webkit.org/blog/8090/workers-at-your-service/ */
 
-var fingerprint = fingerprint || {};
+// var fingerprint = fingerprint || {};
 
-fingerprint.offline = (function(){
+var offline = (function(){
 
     var self = {
 	
 	init: function(scope){
 
+	    console.log("hello");
 	    if ("serviceWorker" in navigator) {
 
+		console.log("world");		
 		var sw_uri = "sw.js";
 		
 		var sw_args = {

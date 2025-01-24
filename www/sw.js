@@ -1,6 +1,7 @@
 const cache_name = 'sfba-v0.0.1';
 
 const app_files = [
+    
     // HTML
     "./index.html",
     "./foursquare/index.html",
@@ -37,7 +38,8 @@ const app_files = [
     "./javascript/protomaps-leaflet.js",
     "./javascript/whosonfirst.spelunker.geojson.js",                        
 
-    // Javascript service workers
+    // Service worker
+    
     "./sw.js"    
 ];
 

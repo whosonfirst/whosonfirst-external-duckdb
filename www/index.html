@@ -10,5 +10,19 @@
       <ul>
 	  <li><a href="./foursquare/">foursquare</a></li>
       </ul>
+      <button id="purge" class="button">Purge offline cache</button>
   </body>
+  <script type="text/javascript" src="javascript/offline.js"></script>
+  <script type="text/javascript">
+   
+   var el = document.getElementById("purge");
+   
+   el.onclick = function(){
+       offline.purge_with_confirmation;
+       return false;
+   };
+
+   console.log("init");
+   offline.init();
+  </script>
 </html>
