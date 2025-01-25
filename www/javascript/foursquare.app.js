@@ -4,7 +4,7 @@ var conn;
 
 var map;
 var base_layer;
-var markers_layer;
+var markers_layers = [];
 var locality_layers = [];
 var neighbourhood_layers = [];
 var popups = {};
@@ -44,6 +44,7 @@ async function start(db){
     var fb = document.getElementById("feedback");
     
     var query_el = document.getElementById("q");
+    var categories_el = document.getElementById("categories");    
     var locality_el = document.getElementById("locality");
     var neighbourhood_el = document.getElementById("neighbourhood");	   	   
     var button_el = document.getElementById("submit");
@@ -126,6 +127,7 @@ async function start(db){
 
     // Borough?
     // Macrohood?
+
     
     fb.innerText = "Setting up categories";
 
@@ -141,9 +143,16 @@ async function start(db){
     }
 
     const categories_dict = buildCetgoriesDictionary(categories_list);
-
-    var categories_el = document.getElementById("categories");
-    draw_categories(categories_dict, categories_el);
+    
+    var opt = document.createElement("option");
+    categories_el.appendChild(opt);
+    
+    for (var k in categories_dict){
+	var opt = document.createElement("option");
+	opt.setAttribute("value", k);
+	opt.appendChild(document.createTextNode(k));
+	categories_el.appendChild(opt);
+    }
     
     fb.innerText = "Setting up search table";
     
@@ -157,6 +166,7 @@ async function start(db){
     
     button_el.removeAttribute("disabled");
     query_el.removeAttribute("disabled");
+    categories_el.removeAttribute("disabled");    
     locality_el.removeAttribute("disabled");
     neighbourhood_el.removeAttribute("disabled");	   	   
     
@@ -226,10 +236,9 @@ function draw_names(select_el, names_table, onchange_cb) {
 async function do_search(){
 
     // Purge the map
-    
-    if (markers_layer){
-	map.removeLayer(markers_layer);
-	markers_layer = null;
+
+    for (var i in markers_layers){    
+	map.removeLayer(markers_layers[i]);
 	popups = {};	    
     }
     
@@ -249,6 +258,7 @@ async function do_search(){
     var fb = document.getElementById("feedback");
     
     var query_el = document.getElementById("q");
+    var categories_el = document.getElementById("categories");    
     var locality_el = document.getElementById("locality");
     var neighbourhood_el = document.getElementById("neighbourhood");	   	   
     var results_el = document.getElementById("results");
@@ -257,14 +267,22 @@ async function do_search(){
     results_el.innerText = "";
     
     var q = query_el.value;
+    var category = categories_el.value;
     var locality_id = parseInt(locality_el.value);
     var neighbourhood_id = parseInt(neighbourhood_el.value);	       
+
+    if ((q == "") && (category =="")){
+
+	// fb.innerText = "
+    }
     
     fb.innerText = "Performing search";
     
-    var where = [
-	"score IS NOT NULL",
-    ];
+    var where = [];
+
+    if (q){
+	where.push("score IS NOT NULL");
+    }
     
     if ((locality_id) && (locality_id != -1)){
 	where.push("locality_id = " + locality_id);
@@ -273,11 +291,24 @@ async function do_search(){
     if ((neighbourhood_id) && (neighbourhood_id != -1)){
 	where.push("neighbourhood_id = " + neighbourhood_id);
     }
+
+    if (category){
+	where.push("categories LIKE '%" + category + "%'");
+    }
     
     const str_where = where.join(" AND ");
     
-    // Note the "conjunctive := 1" bit - this is what is necessary to match all the terms
-    const ids_results = await conn.query("SELECT fts_main_search.match_bm25(id, '" + q + "', conjunctive := 1) AS score, id FROM search WHERE " + str_where + " ORDER BY score DESC");
+	// Note the "conjunctive := 1" bit - this is what is necessary to match all the terms
+
+    var search_q = "SELECT id FROM search WHERE " + str_where + " ORDER BY name ASC";
+
+    if (q){
+	search_q = "SELECT fts_main_search.match_bm25(id, '" + q + "', conjunctive := 1) AS score, id FROM search WHERE " + str_where + " ORDER BY score DESC"
+    }
+
+    console.log(search_q);
+    
+    const ids_results = await conn.query(search_q);
     
     var ids_count = ids_results.toArray().length;
     
@@ -285,48 +316,8 @@ async function do_search(){
 	fb.innerText = "No results found. Ready to search";
 	return false;
     }
-    
-    var ids_list = [];
-    
-    for (const row of ids_results) {
-	ids_list.push("'" + row.id + "'");
-    }
 
-    var results_where = [
-	"fsq_place_id IN ( " + ids_list.join(",") + ")",
-	"date_closed IS NULL",
-    ];
-
-    var count_filters = filters_el.childElementCount;
-    
-    if (count_filters){
-
-	var categories = [];
-	
-	for (var i=0; i < count_filters; i++){
-
-	    var f = filters_el.children[i];
-	    var c = f.getAttribute("data-categories");
-	    
-	    if (! c){
-		continue;
-	    }
-
-	    categories.push("categories LIKE '%" + c + "%'");
-	}
-
-	if (categories.length){
-	    results_where.push("(" + categories.join(" OR ") + ")");
-	}
-    }
-
-    console.log("WHERE", results_where);
-    
-    var str_results_where = results_where.join(" AND ");
-
-    console.log("WHERE", str_results_where);
-    
-    const search_results = await conn.query("SELECT fsq_place_id AS id, name, address, locality, JSON(fsq_category_labels) AS categories, latitude, longitude FROM read_parquet('" + foursquare_venues_url + "') WHERE " + str_results_where);
+    fb.innerText = "Gathering results: " + ids_count;
 
     if ((locality_id) && (locality_id != -1)){
 	draw_geometry(conn, "localities", locality_id);
@@ -335,8 +326,75 @@ async function do_search(){
     if ((neighbourhood_id) && (neighbourhood_id != -1)){
 	draw_geometry(conn, "neighbourhoods", neighbourhood_id);	
     }
+
+    var count_rendered = 0;
     
-    await draw_search_results(search_results);
+    var fetch_ids = async function(ids_list){
+
+	count_rendered += ids_list.length;
+
+	fb.innerText = "Rendering " + num_formatter.format(count_rendered) + " of " + num_formatter.format(ids_count) + " results";
+	
+	var results_where = [
+	    "fsq_place_id IN ( " + ids_list.join(",") + ")",
+	    "date_closed IS NULL",
+	];
+	
+	var count_filters = filters_el.childElementCount;
+	
+	if (count_filters){
+	    
+	    var categories = [];
+	    
+	    for (var i=0; i < count_filters; i++){
+		
+		var f = filters_el.children[i];
+		var c = f.getAttribute("data-categories");
+		
+		if (! c){
+		    continue;
+		}
+		
+		categories.push("categories LIKE '%" + c + "%'");
+	    }
+	    
+	    if (categories.length){
+		results_where.push("(" + categories.join(" OR ") + ")");
+	    }
+	}
+	
+	var str_results_where = results_where.join(" AND ");
+	
+	const search_results = await conn.query("SELECT fsq_place_id AS id, name, address, locality, JSON(fsq_category_labels) AS categories, latitude, longitude FROM read_parquet('" + foursquare_venues_url + "') WHERE " + str_results_where);
+	
+	await draw_search_results(search_results);
+    };
+    
+    var ids_list = [];
+    
+    for (const row of ids_results) {
+	
+	ids_list.push("'" + row.id + "'");
+
+	if (ids_list.length >= 1000){
+	    await fetch_ids(ids_list);
+	    ids_list = [];
+	}
+    }
+
+    if (ids_list.length){
+	fetch_ids(ids_list);
+    }
+
+    switch (ids_count){
+	case 1:
+	    fb.innerText = "Ready to search again.";
+	    break;
+	default:		       
+	    fb.innerText = num_formatter.format(ids_count) + " results. Ready to search again.";
+	    break;
+    }
+    
 }
 
 async function draw_geometry(conn, pane, id) {
@@ -372,15 +430,6 @@ async function draw_search_results(search_results) {
     var count_results = search_results.toArray().length;
     
     var list_el = document.createElement("ul");
-    
-    switch (count_results) {
-	case 1:
-	    fb.innerText = "Compiling only result";
-	    break;
-	default:
-	    fb.innerText = "Compiling " + count_results + " results";
-	    break;
-    }
     
     var features = [];
     
@@ -583,9 +632,11 @@ async function draw_search_results(search_results) {
     };
 
     
-    markers_layer = L.geoJSON(features, markers_opts);
+    var markers_layer = L.geoJSON(features, markers_opts);
     markers_layer.addTo(map);
 
+    markers_layers.push(markers_layer);
+    
     switch (features.length){
 	case 0:
 	    break;
@@ -605,15 +656,6 @@ async function draw_search_results(search_results) {
     }
     
     results_el.appendChild(list_el);
-    
-    switch (count_results){
-	case 1:
-	    fb.innerText = "Ready to search again.";
-	    break;
-	default:		       
-	    fb.innerText = num_formatter.format(count_results) + " results. Ready to search again.";
-	    break;
-    }
 }
 
 async function fetch_localities(conn){
