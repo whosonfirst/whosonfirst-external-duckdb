@@ -123,11 +123,29 @@ async function start(db){
     fb.innerText = "Setting up localities";
 
     fetch_localities(conn);
-    
-    fb.innerText = "Setting up search table";
 
     // Borough?
     // Macrohood?
+    
+    fb.innerText = "Setting up categories";
+
+    const categories_results = await conn.query("SELECT DISTINCT(JSON_EXTRACT_STRING(fsq_category_labels, '$[*]')) AS category FROM read_parquet('" + foursquare_venues_url + "') ORDER BY category ASC");
+
+    var categories_list = [];
+
+    for (const row of categories_results){
+
+	if (row.category){
+	    row.category.toArray().forEach( path => categories_list.push(path));
+	}
+    }
+
+    const categories_dict = buildCetgoriesDictionary(categories_list);
+
+    var categories_el = document.getElementById("categories");
+    draw_categories(categories_dict, categories_el);
+    
+    fb.innerText = "Setting up search table";
     
     await conn.query("CREATE TABLE search AS SELECT fsq_place_id AS id, name, address, JSON_EXTRACT_STRING(fsq_category_labels, '$[*]') AS categories, JSON_EXTRACT(\"wof:hierarchies\", '$[0].locality_id') AS locality_id, JSON_EXTRACT(\"wof:hierarchies\", '$[0].neighbourhood_id') AS neighbourhood_id FROM read_parquet('" + foursquare_venues_url + "')");
     
@@ -793,9 +811,84 @@ function draw_filters() {
     wrapper_el.style.display = "block";
 }
 
-    
-function buildCetgoriesDictionary(categories) {
+function draw_categories(categories_dict, target_el){
 
+    var breadcrumbs = [];
+    
+    var render = function(dict){
+	
+	for (const k in dict){
+	    
+	    const v = dict[k];
+	    
+	    if (! v){
+		
+		var categories_ul = document.createElement("ul");
+		categories_ul.setAttribute("class", "venue-categories");
+		
+		var to_render = breadcrumbs;
+		to_render.push(k);
+		
+		var render_count = to_render.length;
+		
+		for (var r=0; r < render_count; r++){
+		    
+		    var anchor = document.createElement("a");
+		    anchor.setAttribute("href", "#");
+		    anchor.setAttribute("data-categories", to_render.slice(0, r + 1).join(" > "));
+		    anchor.appendChild(document.createTextNode(to_render[r]));
+		    
+		    anchor.onclick = function(e){
+			
+			var el = e.target;
+			var categories = el.getAttribute("data-categories");
+			
+			if (! categories){
+			    console.error("Element is missing data-categories attribute", el);
+			    return false;
+			}
+			
+			var add_filter = true;
+			
+			for (var k in filters){
+			    
+			    if (k.startsWith(categories)){
+				add_filter = false;
+				break;
+			    }
+			}
+			
+			if (add_filter){
+			    filters[categories] = true;
+			    draw_filters();
+			    do_search();
+			}
+			
+			return false;
+		    };
+		    
+		    var categories_li = document.createElement("li");
+		    categories_li.appendChild(anchor);
+		    categories_ul.appendChild(categories_li);
+		}
+		
+		target_el.appendChild(categories_ul);
+    		
+		// console.log(row.id, breadcrumbs, k);
+		continue;
+	    }
+	    
+	    breadcrumbs.push(k);
+	    render(v);
+	    breadcrumbs.pop();
+	}
+    };
+
+    render(categories_dict);
+}
+
+function buildCetgoriesDictionary(categories) {
+    
     function addPathToTree(tree, path) {
 	
         const parts = path.split(' > ');
