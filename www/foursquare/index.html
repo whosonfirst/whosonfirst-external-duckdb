@@ -8,7 +8,7 @@
     <link rel="stylesheet" type="text/css" href="../css/leaflet.css" />
     <link rel="stylesheet" type="text/css" href="../css/foursquare.css" />    
   </head>
-  <body data-foursquare-venues="sfba-foursquare.parquet" data-whosonfirst-properties="sfba-whosonfirst.parquet" data-pmtiles="sfba.pmtiles">
+  <body data-url-prefix="" data-foursquare-venues="sfba-foursquare.parquet" data-whosonfirst-properties="sfba-whosonfirst.parquet" data-pmtiles="sfba.pmtiles">
       <div class="grid-view">
 	  <div id="map"></div>	  
 	  <div class="controls">
@@ -17,8 +17,6 @@
 
 		  <div>
 		      <div class="mb-3 form-inline" id="query-wrapper">
-			  <!-- <label for="q" class="form-label col-auto">Query</label>-->
-			  
 			  <input type="text" class="form-control" id="q" value="" placeholder="Enter a query term or phrase to search for" disabled="disabled" />
 			  <button class="btn btn-primary" id="submit" type="submit" disabled="disabled">Search</button>
 		      </div>

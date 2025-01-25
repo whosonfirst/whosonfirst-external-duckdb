@@ -18,24 +18,31 @@ var pmtiles_data_url;
 
 var filters = {};
 
-// D SELECT DISTINCT(JSON_EXTRACT_STRING(fsq_category_labels, '$[*]')) AS category FROM read_parquet('www/data/sfba-foursquare.parquet') ORDER BY category ASC;
-
 async function start(db){
 
+    var url_prefix = document.body.getAttribute("data-url-prefix");
     var foursquare_venues = document.body.getAttribute("data-foursquare-venues");
     var whosonfirst_properties = document.body.getAttribute("data-whosonfirst-properties");
     var pmtiles_data = document.body.getAttribute("data-pmtiles");        
 
     var root_url = location.protocol + "//" + location.host;
     
+    var data_root = "/data/";
+    var pmtiles_root = "/pmtiles/";
+    
+    if (url_prefix){
+	data_root = url_prefix + data_root;
+	pmtiles_root = url_prefix + pmtiles_root;	
+    }
+
     var foursquare_url = new URL(root_url);
-    foursquare_url.pathname = "/data/" + foursquare_venues;
+    foursquare_url.pathname = data_root + foursquare_venues;
 
     var whosonfirst_url = new URL(root_url);
-    whosonfirst_url.pathname = "/data/" + whosonfirst_properties;
+    whosonfirst_url.pathname = data_root + whosonfirst_properties;
 
     var pmtiles_url = new URL(root_url);
-    pmtiles_url.pathname = "/pmtiles/" + pmtiles_data;
+    pmtiles_url.pathname = pmtiles_root + pmtiles_data;
     
     foursquare_venues_url = foursquare_url.toString();
     whosonfirst_properties_url = whosonfirst_url.toString();
