@@ -7,6 +7,7 @@ var base_layer;
 var markers_layers = [];
 var locality_layers = [];
 var neighbourhood_layers = [];
+var pointinpolygon_layers = {};
 var popups = {};
 
 var dt_formatter;
@@ -72,9 +73,6 @@ async function start(db){
 
     fb.innerText = "Loading extensions";
     
-    await conn.query("INSTALL spatial");    
-    await conn.query("LOAD spatial");
-
     fb.innerText = "Setting up map";   
     
     // Apparently ST_Extent_Agg is not available in duckdb-wasm
@@ -125,6 +123,7 @@ async function start(db){
 	"popups": 4000,
 	"markers": 3000,
 	"neighbourhoods": 2000,
+	"pointinpolygon": 3100,		
 	"localities": 1000,
     };
 
@@ -177,30 +176,8 @@ async function start(db){
     
     await conn.query("PRAGMA create_fts_index('search', 'id', 'name', 'address', 'categories', 'locality_id', 'neighbourhood_id')");
 
-    // Set up PIP handlers
+    setup_pointinpolygon();
     
-    map.on("moveend", async function(){
-	
-	var loc = map.getCenter();
-	var wkt = "POINT(" + loc.lng + " " + loc.lat + ")";
-
-	var pip_query = "SELECT * FROM read_parquet('" + whosonfirst_properties_url + "') WHERE ST_Contains(ST_GeomFromGeoJSON(geometry), ST_GeomFromText('" + wkt + "'))";
-	
-	const pip_results = await conn.query(pip_query);
-    
-	for (const row of pip_results){
-
-	    if (row.id == 85922583){
-		continue;
-	    }
-	    
-	    console.log("PIP", row.id, row.name);
-	    draw_geometry(conn, "neighbourhoods", row.id);		    
-	}
-
-	return false;
-    });
-
     fb.innerText = "Ready to search";
     
     button_el.removeAttribute("disabled");
@@ -439,8 +416,26 @@ async function draw_geometry(conn, pane, id) {
 	return
     }
 
-    var geom_layer = L.geoJSON(geom);
-    geom_layer.addTo(map, { 'pane': pane });
+    var layer_args = {
+	'pane': pane,
+    };
+
+    var geom_args = {};
+    
+    if (pane == "pointinpolygon"){
+
+	function onEachFeature(feature, layer) {
+	    layer.on('click', function (e) {
+		console.log("CLICK", feature);
+	    });
+	}
+	geom_args = {
+	    onEachFeature: onEachFeature,
+	};
+    }
+
+    var geom_layer = L.geoJSON(geom, geom_args);
+    geom_layer.addTo(map, layer_args);
 
     switch (pane){
 	case "localities":
@@ -449,7 +444,73 @@ async function draw_geometry(conn, pane, id) {
 	case "neighbourhoods":
 	    neighbourhood_layers.push(geom_layer);
 	    break;
+	case "pointinpolygon":
+	    pointinpolygon_layers[id] = geom_layer;
+	    break;
+	    
     }
+}
+
+async function draw_pointinpolygon_row(row) {
+
+    const props = {
+	'id': row.id,
+	'name': row.name,
+	'placetype': row.placetype,
+    };
+
+    const geom = JSON.parse(row.geometry);    
+
+    const f = {
+	type: 'Feature',
+	properties: props,
+	geometry: geom,
+    };
+
+    var layer_args = {
+	'pane': 'pointinpolygon',
+    };
+
+    var geom_args = {
+	style: {
+	    fillColor: "#fff",
+	    color: "#f0149b",
+	    weight: 4,
+	    opacity: .8,
+	    fillOpacity: 0,
+	},
+	onEachFeature: function(feature, layer) {
+	    layer.on('click', function (e) {
+		const props = feature.properties;
+		const id = props.id;
+		const name = props.name;		
+		const pt = props.placetype;
+
+		console.log("CLICK", id, name, pt);
+		var el;
+		
+		switch(pt){
+		    case "neighbourhood":
+			break;
+		    case "locality":
+			break;
+		    default:
+			break;
+		}
+
+		if (el){
+		    // update menus here...
+		}
+
+		return false;
+	    });
+	}
+    }
+
+    var geom_layer = L.geoJSON(f, geom_args);
+    geom_layer.addTo(map, layer_args);
+
+    pointinpolygon_layers[row.id] = geom_layer;
 }
 
 async function draw_search_results(search_results) {
@@ -690,6 +751,73 @@ async function draw_search_results(search_results) {
     }
     
     results_el.appendChild(list_el);
+}
+
+async function setup_pointinpolygon(){
+
+    console.log("SET UP PIP");
+    // Set up PIP handlers
+
+    await conn.query("INSTALL spatial");    
+    await conn.query("LOAD spatial");
+    
+    map.on("moveend", async function(){
+	
+	var loc = map.getCenter();
+
+	// START OF put me in a function...
+	var wkt = "POINT(" + loc.lng + " " + loc.lat + ")";
+
+	const placetypes = [
+	    "neighbourhood",
+	    "locality",
+	];
+
+	var has_geom = false;
+	var new_layers = {};
+	
+	for (const i in placetypes){
+
+	    const pt = placetypes[i];
+	    
+	    const pip_query = "SELECT * FROM read_parquet('" + whosonfirst_properties_url + "') WHERE placetype='" + pt + "' AND ST_Contains(ST_GeomFromGeoJSON(geometry), ST_GeomFromText('" + wkt + "'))";
+	
+	    const pip_results = await conn.query(pip_query);
+    
+	    for (const row of pip_results){
+
+		new_layers[row.id] = true;
+		
+		if (pointinpolygon_layers[row.id]){
+		    console.log("PIP layer already drawn", row.id);
+		    continue;
+		}
+		    
+	    	draw_pointinpolygon_row(row);
+		has_geom = true;
+	    }
+
+	    if (has_geom){
+		break;
+	    }	    
+	}
+
+	for (const id in pointinpolygon_layers){
+	    
+	    if (new_layers[id]){
+		continue;
+	    };
+	    
+	    map.removeLayer(pointinpolygon_layers[id]);
+	    delete(pointinpolygon_layers[id]);
+	}
+	
+	// START OF put me in a function...
+	
+	return false;
+    });
+
+    console.log("OKAY PIP");
 }
 
 async function fetch_localities(conn){
