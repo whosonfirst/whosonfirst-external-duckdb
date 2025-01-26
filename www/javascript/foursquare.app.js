@@ -69,7 +69,12 @@ async function start(db){
     fb.innerText = "Connecting to database";
     
     conn = await db.connect();
+
+    fb.innerText = "Loading extensions";
     
+    await conn.query("INSTALL spatial");    
+    await conn.query("LOAD spatial");
+
     fb.innerText = "Setting up map";   
     
     // Apparently ST_Extent_Agg is not available in duckdb-wasm
@@ -110,7 +115,7 @@ async function start(db){
     map.fitBounds(bounds);
         
     base_layer = protomapsL.leafletLayer({
-	url: pmtiles_data_url,	// 'http://localhost:8080/pmtiles/sfba.pmtiles',
+	url: pmtiles_data_url,
 	theme:"white"
     });
     
@@ -127,6 +132,9 @@ async function start(db){
 	var p = map.createPane(label);
 	p.style.zIndex = panes[label];
     }
+
+    // onmove PIP handler is installed below
+    // after search is ready
     
     fb.innerText = "Setting up localities";
 
@@ -168,7 +176,31 @@ async function start(db){
     fb.innerText = "Indexing search table";	   
     
     await conn.query("PRAGMA create_fts_index('search', 'id', 'name', 'address', 'categories', 'locality_id', 'neighbourhood_id')");
+
+    // Set up PIP handlers
     
+    map.on("moveend", async function(){
+	
+	var loc = map.getCenter();
+	var wkt = "POINT(" + loc.lng + " " + loc.lat + ")";
+
+	var pip_query = "SELECT * FROM read_parquet('" + whosonfirst_properties_url + "') WHERE ST_Contains(ST_GeomFromGeoJSON(geometry), ST_GeomFromText('" + wkt + "'))";
+	
+	const pip_results = await conn.query(pip_query);
+    
+	for (const row of pip_results){
+
+	    if (row.id == 85922583){
+		continue;
+	    }
+	    
+	    console.log("PIP", row.id, row.name);
+	    draw_geometry(conn, "neighbourhoods", row.id);		    
+	}
+
+	return false;
+    });
+
     fb.innerText = "Ready to search";
     
     button_el.removeAttribute("disabled");
