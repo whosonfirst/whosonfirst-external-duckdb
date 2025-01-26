@@ -278,10 +278,6 @@ async function do_search(){
     var locality_id = parseInt(locality_el.value);
     var neighbourhood_id = parseInt(neighbourhood_el.value);	       
 
-    if ((q == "") && (category =="")){
-
-	// fb.innerText = "
-    }
     
     fb.innerText = "Performing search";
     
@@ -303,13 +299,12 @@ async function do_search(){
 	where.push("categories LIKE '%" + category + "%'");
     }
     
-    const str_where = where.join(" AND ");
-    
-	// Note the "conjunctive := 1" bit - this is what is necessary to match all the terms
+    const str_where = where.join(" AND ");   
 
     var search_q = "SELECT id FROM search WHERE " + str_where + " ORDER BY name ASC";
 
     if (q){
+	// Note the "conjunctive := 1" bit - this is what is necessary to match all the terms	
 	search_q = "SELECT fts_main_search.match_bm25(id, '" + q + "', conjunctive := 1) AS score, id FROM search WHERE " + str_where + " ORDER BY score DESC"
     }
 
