@@ -26,7 +26,7 @@ var neighbourhood_el = document.getElementById("neighbourhood");
 var filters_el = document.getElementById("filters");
 var button_el = document.getElementById("submit");
 
-var feedback_el = document.getElementById("feedback");
+var status_el = document.getElementById("status");
 var results_el = document.getElementById("results");
 
 async function start(db){
@@ -69,13 +69,11 @@ async function start(db){
 
     num_formatter = new Intl.NumberFormat();
         
-    feedback_el.innerText = "Connecting to database";
+    status("Connecting to database");
     
     conn = await db.connect();
 
-    feedback_el.innerText = "Loading extensions";
-    
-    feedback_el.innerText = "Setting up map";   
+    status("Setting up map");   
     
     // Apparently ST_Extent_Agg is not available in duckdb-wasm
     // await conn.query("LOAD spatial");    
@@ -83,6 +81,9 @@ async function start(db){
     // Error: Catalog Error: Scalar Function with name st_extent_agg does not exist!
     // Did you mean "ST_Extent"?
     // LINE 1: SELECT ST_Extent_Agg(geom) FROM (SELECT ST_Geo...
+
+    // This might be true. It might actually be a INSTALL/LOAD spatial thing since that is
+    // working for the PIP stuff below... TBD.
     
     var min_x;
     var min_y;
@@ -101,7 +102,7 @@ async function start(db){
 	max_y = maxy_r.toArray()[0].latitude;
 	
     } catch(err) {
-	feedback_el.innerText = "Failed to derive extent, " + err;
+	status("Failed to derive extent, " + err);
 	console.error(err);	       
 	return;
     }
@@ -113,7 +114,13 @@ async function start(db){
     
     map = L.map('map');    
     map.fitBounds(bounds);
-        
+
+    map.on("click", function(e){
+	var loc = e.latlng;
+	map.setView(loc, map.getZoom());
+	return false;
+    });
+    
     base_layer = protomapsL.leafletLayer({
 	url: pmtiles_data_url,
 	theme:"white"
@@ -137,7 +144,7 @@ async function start(db){
     // onmove PIP handler is installed below
     // after search is ready
     
-    feedback_el.innerText = "Setting up localities";
+    status("Setting up localities");
 
     await fetch_localities(conn);
 
@@ -145,7 +152,7 @@ async function start(db){
     // Macrohood?
 
     
-    feedback_el.innerText = "Setting up categories";
+    status("Setting up categories");
 
     const categories_results = await conn.query("SELECT DISTINCT(JSON_EXTRACT_STRING(fsq_category_labels, '$[*]')) AS category FROM read_parquet('" + foursquare_venues_url + "') ORDER BY category ASC");
 
@@ -170,17 +177,17 @@ async function start(db){
 	categories_el.appendChild(opt);
     }
     
-    feedback_el.innerText = "Setting up search table";
+    status("Setting up search table");
     
     await conn.query("CREATE TABLE search AS SELECT fsq_place_id AS id, name, address, JSON_EXTRACT_STRING(fsq_category_labels, '$[*]') AS categories, JSON_EXTRACT(\"wof:hierarchies\", '$[0].locality_id') AS locality_id, JSON_EXTRACT(\"wof:hierarchies\", '$[0].neighbourhood_id') AS neighbourhood_id FROM read_parquet('" + foursquare_venues_url + "')");
     
-    feedback_el.innerText = "Indexing search table";	   
+    status("Indexing search table");	   
     
     await conn.query("PRAGMA create_fts_index('search', 'id', 'name', 'address', 'categories', 'locality_id', 'neighbourhood_id')");
 
     setup_pointinpolygon();
     
-    feedback("Ready to search");
+    status("Ready to search");
     
     button_el.removeAttribute("disabled");
     query_el.removeAttribute("disabled");
@@ -287,7 +294,7 @@ async function do_search(){
     var neighbourhood_id = parseInt(neighbourhood_el.value);	       
 
     
-    feedback("Performing search");
+    status("Performing search");
     
     var where = [];
 
@@ -306,14 +313,15 @@ async function do_search(){
     if (category){
 	where.push("categories LIKE '%" + category + "%'");
     }
-    
-    const str_where = where.join(" AND ");   
+
+    var str_where = where.join(" AND ");    
 
     var search_q = "SELECT id FROM search WHERE " + str_where + " ORDER BY name ASC";
-
+    
     if (q){
 	// Note the "conjunctive := 1" bit - this is what is necessary to match all the terms	
 	search_q = "SELECT fts_main_search.match_bm25(id, '" + q + "', conjunctive := 1) AS score, id FROM search WHERE " + str_where + " ORDER BY score DESC"
+	str_where = "query is '" + q + "' AND " + str_where;
     }
 
     console.log(search_q);
@@ -323,11 +331,11 @@ async function do_search(){
     var ids_count = ids_results.toArray().length;
     
     if (! ids_count){
-	feedback("No results found. Ready to search");
+	status("No results found. Ready to search");
 	return false;
     }
 
-    feedback_el.innerText = "Gathering results: " + ids_count;
+    status("Gathering results: " + ids_count);
 
     if ((locality_id) && (locality_id != -1)){
 	draw_geometry(conn, "localities", locality_id);
@@ -362,7 +370,7 @@ async function do_search(){
 
 	count_rendered += ids_list.length;
 
-	feedback_el.innerText = "Rendering " + num_formatter.format(count_rendered) + " of " + num_formatter.format(ids_count) + " results";
+	status("Rendering " + num_formatter.format(count_rendered) + " of " + num_formatter.format(ids_count) + " results");
 	
 	var results_where = [
 	    "fsq_place_id IN ( " + ids_list.join(",") + ")",
@@ -415,7 +423,7 @@ async function do_search(){
 	    break;
     }
 
-    feedback("Ready to search");
+    status("Ready to search");
 }
 
 async function draw_geometry(conn, pane, id) {
@@ -523,6 +531,13 @@ async function draw_pointinpolygon_row(row, locality_id) {
     geom_layer.addTo(map, layer_args);
 
     pointinpolygon_layers[row.id] = geom_layer;
+
+    /*
+    if (f.properties.placetype == "neighbourhood") {
+	var bounds = whosonfirst.spelunker.geojson.derive_bounds(f);
+	map.fitBounds(bounds);       	
+    }
+   */
 }
 
 async function draw_search_results(search_results) {
@@ -760,7 +775,7 @@ async function draw_search_results(search_results) {
 
 async function setup_pointinpolygon(){
 
-    feedback("Initializing point in polygon support");
+    status("Initializing point in polygon support");
 
     await conn.query("INSTALL spatial");    
     await conn.query("LOAD spatial");
@@ -859,7 +874,7 @@ async function fetch_localities(conn){
 	return false;
     };
 
-    feedback("Setting up localities");
+    status("Setting up localities");
 
     var locality_names = {};
     var locality_ids = [];
@@ -897,7 +912,7 @@ async function fetch_neighbourhoods(conn, locality_id) {
 	return;
     }
     
-    feedback_el.innerText = "Fetching neighbourhoods";
+    status("Fetching neighbourhoods");
     
     const neighbourhood_results = await conn.query("SELECT DISTINCT(JSON_EXTRACT_STRING(\"wof:hierarchies\", '$[0].neighbourhood_id')) AS neighbourhood_id FROM read_parquet('" + foursquare_venues_url + "') WHERE JSON_EXTRACT(\"wof:hierarchies\", '$[0].locality_id') = '" + locality_id + "'");
     
@@ -914,7 +929,7 @@ async function fetch_neighbourhoods(conn, locality_id) {
     }
 
     if (neighbourhood_ids.length == 0){
-	feedback_el.innerText = "No neighbourhoods found for locality. Ready to search.";
+	status("No neighbourhoods found for locality. Ready to search.");
 	wrapper_el.style.display = "none";
 	return;
     }
@@ -929,7 +944,7 @@ async function fetch_neighbourhoods(conn, locality_id) {
     
     draw_names(neighbourhood_el, neighbourhood_names);
     
-    feedback("Ready to search");
+    status("Ready to search");
 
     neighbourhood_el.value = current_neighbourhood;
     wrapper_el.style.display = "block";    
@@ -1120,7 +1135,7 @@ function buildCetgoriesDictionary(categories) {
     return categoriesDictionary;
 }
 
-async function feedback(msg){
+async function status(msg){
     console.debug(msg);
-    feedback_el.innerText = msg;
+    status_el.innerText = msg;
 }
