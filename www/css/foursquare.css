@@ -3,6 +3,11 @@
 	font-style:italic;
 }
 
+#location {
+	font-size: small;
+	margin-bottom: 1rem;
+}
+
 #q {
 	width: auto !important;
 	display: inline-block !important;

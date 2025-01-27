@@ -19,6 +19,16 @@ var pmtiles_data_url;
 
 var filters = {};
 
+var query_el = document.getElementById("q");
+var categories_el = document.getElementById("categories");    
+var locality_el = document.getElementById("locality");
+var neighbourhood_el = document.getElementById("neighbourhood");
+var filters_el = document.getElementById("filters");
+var button_el = document.getElementById("submit");
+
+var feedback_el = document.getElementById("feedback");
+var results_el = document.getElementById("results");
+
 async function start(db){
 
     var url_prefix = document.body.getAttribute("data-url-prefix");
@@ -48,15 +58,7 @@ async function start(db){
     foursquare_venues_url = foursquare_url.toString();
     whosonfirst_properties_url = whosonfirst_url.toString();
     pmtiles_data_url = pmtiles_url.toString();
-    
-    var fb = document.getElementById("feedback");
-    
-    var query_el = document.getElementById("q");
-    var categories_el = document.getElementById("categories");    
-    var locality_el = document.getElementById("locality");
-    var neighbourhood_el = document.getElementById("neighbourhood");	   	   
-    var button_el = document.getElementById("submit");
-    
+        
     // en-CA is important in order to get YYYY-MM-dd formatting. Go, Canada!
     dt_formatter = new Intl.DateTimeFormat('en-CA', {
 	year: 'numeric',
@@ -67,13 +69,13 @@ async function start(db){
 
     num_formatter = new Intl.NumberFormat();
         
-    fb.innerText = "Connecting to database";
+    feedback_el.innerText = "Connecting to database";
     
     conn = await db.connect();
 
-    fb.innerText = "Loading extensions";
+    feedback_el.innerText = "Loading extensions";
     
-    fb.innerText = "Setting up map";   
+    feedback_el.innerText = "Setting up map";   
     
     // Apparently ST_Extent_Agg is not available in duckdb-wasm
     // await conn.query("LOAD spatial");    
@@ -99,7 +101,7 @@ async function start(db){
 	max_y = maxy_r.toArray()[0].latitude;
 	
     } catch(err) {
-	fb.innerText = "Failed to derive extent, " + err;
+	feedback_el.innerText = "Failed to derive extent, " + err;
 	console.error(err);	       
 	return;
     }
@@ -135,15 +137,15 @@ async function start(db){
     // onmove PIP handler is installed below
     // after search is ready
     
-    fb.innerText = "Setting up localities";
+    feedback_el.innerText = "Setting up localities";
 
-    fetch_localities(conn);
+    await fetch_localities(conn);
 
     // Borough?
     // Macrohood?
 
     
-    fb.innerText = "Setting up categories";
+    feedback_el.innerText = "Setting up categories";
 
     const categories_results = await conn.query("SELECT DISTINCT(JSON_EXTRACT_STRING(fsq_category_labels, '$[*]')) AS category FROM read_parquet('" + foursquare_venues_url + "') ORDER BY category ASC");
 
@@ -168,17 +170,17 @@ async function start(db){
 	categories_el.appendChild(opt);
     }
     
-    fb.innerText = "Setting up search table";
+    feedback_el.innerText = "Setting up search table";
     
     await conn.query("CREATE TABLE search AS SELECT fsq_place_id AS id, name, address, JSON_EXTRACT_STRING(fsq_category_labels, '$[*]') AS categories, JSON_EXTRACT(\"wof:hierarchies\", '$[0].locality_id') AS locality_id, JSON_EXTRACT(\"wof:hierarchies\", '$[0].neighbourhood_id') AS neighbourhood_id FROM read_parquet('" + foursquare_venues_url + "')");
     
-    fb.innerText = "Indexing search table";	   
+    feedback_el.innerText = "Indexing search table";	   
     
     await conn.query("PRAGMA create_fts_index('search', 'id', 'name', 'address', 'categories', 'locality_id', 'neighbourhood_id')");
 
     setup_pointinpolygon();
     
-    fb.innerText = "Ready to search";
+    feedback("Ready to search");
     
     button_el.removeAttribute("disabled");
     query_el.removeAttribute("disabled");
@@ -219,6 +221,7 @@ function draw_names(select_el, names_table, onchange_cb) {
     
     names.sort()
 
+    var current_value = select_el.value;
     select_el.innerHTML = "";
     
     var opt = document.createElement("option");
@@ -243,7 +246,8 @@ function draw_names(select_el, names_table, onchange_cb) {
 	    select_el.appendChild(opt);
 	}
     }
-    
+
+    select_el.value = current_value;
     if (onchange_cb) {
 	select_el.onchange = onchange_cb;
     }
@@ -270,16 +274,7 @@ async function do_search(){
     locality_layers = [];
     
     // Set up DOM elements
-    
-    var fb = document.getElementById("feedback");
-    
-    var query_el = document.getElementById("q");
-    var categories_el = document.getElementById("categories");    
-    var locality_el = document.getElementById("locality");
-    var neighbourhood_el = document.getElementById("neighbourhood");	   	   
-    var results_el = document.getElementById("results");
-    var filters_el = document.getElementById("filters");
-    
+        
     results_el.innerText = "";
     
     var q = query_el.value;
@@ -288,7 +283,7 @@ async function do_search(){
     var neighbourhood_id = parseInt(neighbourhood_el.value);	       
 
     
-    fb.innerText = "Performing search";
+    feedback_el.innerText = "Performing search";
     
     var where = [];
 
@@ -324,11 +319,11 @@ async function do_search(){
     var ids_count = ids_results.toArray().length;
     
     if (! ids_count){
-	fb.innerText = "No results found. Ready to search";
+	feedback("No results found. Ready to search");
 	return false;
     }
 
-    fb.innerText = "Gathering results: " + ids_count;
+    feedback_el.innerText = "Gathering results: " + ids_count;
 
     if ((locality_id) && (locality_id != -1)){
 	draw_geometry(conn, "localities", locality_id);
@@ -344,7 +339,7 @@ async function do_search(){
 
 	count_rendered += ids_list.length;
 
-	fb.innerText = "Rendering " + num_formatter.format(count_rendered) + " of " + num_formatter.format(ids_count) + " results";
+	feedback_el.innerText = "Rendering " + num_formatter.format(count_rendered) + " of " + num_formatter.format(ids_count) + " results";
 	
 	var results_where = [
 	    "fsq_place_id IN ( " + ids_list.join(",") + ")",
@@ -399,10 +394,10 @@ async function do_search(){
 
     switch (ids_count){
 	case 1:
-	    fb.innerText = "Ready to search again.";
+	    feedback("Ready to search again.");
 	    break;
 	default:		       
-	    fb.innerText = num_formatter.format(ids_count) + " results. Ready to search again.";
+	    feedback(num_formatter.format(ids_count) + " results. Ready to search again.");
 	    break;
     }
     
@@ -482,27 +477,24 @@ async function draw_pointinpolygon_row(row, locality_id) {
 	},
 	onEachFeature: function(feature, layer) {
 	    layer.on('click', function (e) {
+		
 		const props = feature.properties;
 		const id = props.id;
-		const name = props.name;		
 		const pt = props.placetype;
-
-		console.log("CLICK", props);
 		
 		switch(pt){
 		    case "neighbourhood":
 
-			// Y U NO WORK???
-			console.log("LOC", locality_el, props.locality_id);		    
-			var locality_el = document.getElementById("locality");			
-			locality_el.value = props.locality_id;
-			
-			var neighbourhood_el = document.getElementById("neighbourhood");
+			locality_el.value = props.locality_id;			
 			neighbourhood_el.value = id;
-
+			break;
+			
 		    case "locality":
-			var locality_el = document.getElementById("locality");
-			locality_el.value = id;			
+			
+			neighbourhood_el.value = -1;
+			locality_el.value = id;
+			break;
+			
 		    default:
 			break;
 		}
@@ -520,13 +512,6 @@ async function draw_pointinpolygon_row(row, locality_id) {
 
 async function draw_search_results(search_results) {
 
-    var fb = document.getElementById("feedback");
-    
-    var query_el = document.getElementById("q");
-    var locality_el = document.getElementById("locality");
-    var neighbourhood_el = document.getElementById("neighbourhood");	   	   
-    var results_el = document.getElementById("results");
-    
     var count_results = search_results.toArray().length;
     
     var list_el = document.createElement("ul");
@@ -767,6 +752,8 @@ async function setup_pointinpolygon(){
     await conn.query("LOAD spatial");
 
     map.on("moveend", async function(){
+
+	var location_el = document.getElementById("location");
 	
 	var loc = map.getCenter();
 
@@ -784,9 +771,6 @@ async function setup_pointinpolygon(){
 	}
 
 	var locality_id = locality_row.id;
-	var locality_el = document.getElementById("locality");
-	// locality_el.value = locality_id;
-	
 	fetch_neighbourhoods(conn, locality_id);
 
 	//
@@ -807,6 +791,7 @@ async function setup_pointinpolygon(){
 		continue;
 	    }
 
+	    location_el.innerText = "Map centered on " + row.name + " (neighbourhood). Click polygon to toggle locality and neighbourhood menus.";	    
 	    draw_pointinpolygon_row(row, locality_id);
 	    has_neighbourhoods = true;
 	}
@@ -816,6 +801,7 @@ async function setup_pointinpolygon(){
 	    new_layers[locality_id] = true;
 	    
 	    if (! pointinpolygon_layers[locality_id]){
+		location_el.innerText = "Map centered on " + locality_row.name + " (locality). Click polygon to toggle locality menu.";
 		draw_pointinpolygon_row(locality_row);
 	    }
 	}
@@ -839,10 +825,6 @@ async function setup_pointinpolygon(){
 
 async function fetch_localities(conn){
 
-    var fb = document.getElementById("feedback");
-    
-    var query_el = document.getElementById("q");
-    var locality_el = document.getElementById("locality");
     var wrapper_el = document.getElementById("locality-wrapper");    
     
     // Note: It is not really useful to use SELECT DISTINCT(locality) FROM read_parquet('sfba-foursquare.parquet') ORDER BY locality ASC;
@@ -863,7 +845,7 @@ async function fetch_localities(conn){
 	return false;
     };
 
-    fb.innerText = "Setting up localities";
+    feedback("Setting up localities");
 
     var locality_names = {};
     var locality_ids = [];
@@ -891,12 +873,9 @@ async function fetch_localities(conn){
 
 async function fetch_neighbourhoods(conn, locality_id) {
 
-    var fb = document.getElementById("feedback");
-
-    var locality_el = document.getElementById("locality");    
-    var neighbourhood_el = document.getElementById("neighbourhood");
     var wrapper_el = document.getElementById("neighbourhood-wrapper");	   	       
-    
+
+    var current_neighbourhood = neighbourhood_el.value;
     neighbourhood_el.innerHTML = "";
     
     if (locality_id == -1){
@@ -904,10 +883,7 @@ async function fetch_neighbourhoods(conn, locality_id) {
 	return;
     }
     
-    // locality_el.setAttribute("disabled", "disabled");
-    // neighbourhood_el.setAttribute("disabled", "disabled");
-    
-    fb.innerText = "Fetching neighbourhoods";
+    feedback_el.innerText = "Fetching neighbourhoods";
     
     const neighbourhood_results = await conn.query("SELECT DISTINCT(JSON_EXTRACT_STRING(\"wof:hierarchies\", '$[0].neighbourhood_id')) AS neighbourhood_id FROM read_parquet('" + foursquare_venues_url + "') WHERE JSON_EXTRACT(\"wof:hierarchies\", '$[0].locality_id') = '" + locality_id + "'");
     
@@ -924,7 +900,7 @@ async function fetch_neighbourhoods(conn, locality_id) {
     }
 
     if (neighbourhood_ids.length == 0){
-	fb.innerText = "No neighbourhoods found for locality. Ready to search.";
+	feedback_el.innerText = "No neighbourhoods found for locality. Ready to search.";
 	wrapper_el.style.display = "none";
 	return;
     }
@@ -939,10 +915,9 @@ async function fetch_neighbourhoods(conn, locality_id) {
     
     draw_names(neighbourhood_el, neighbourhood_names);
     
-    // locality_el.removeAttribute("disabled");
-    // neighbourhood_el.removeAttribute("disabled");
-    fb.innerText = "Ready to search";
-    
+    feedback("Ready to search");
+
+    neighbourhood_el.value = current_neighbourhood;
     wrapper_el.style.display = "block";    
 }
 
@@ -1129,4 +1104,9 @@ function buildCetgoriesDictionary(categories) {
     categories.forEach(path => addPathToTree(categoriesDictionary, path));
 
     return categoriesDictionary;
+}
+
+async function feedback(msg){
+    console.debug(msg);
+    feedback_el.innerText = msg;
 }
