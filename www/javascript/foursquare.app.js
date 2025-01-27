@@ -248,6 +248,7 @@ function draw_names(select_el, names_table, onchange_cb) {
     }
 
     select_el.value = current_value;
+    
     if (onchange_cb) {
 	select_el.onchange = onchange_cb;
     }
@@ -274,7 +275,10 @@ async function do_search(){
     locality_layers = [];
     
     // Set up DOM elements
-        
+
+    var criteria_el = document.getElementById("criteria");
+
+    criteria_el.innerText = "";
     results_el.innerText = "";
     
     var q = query_el.value;
@@ -283,7 +287,7 @@ async function do_search(){
     var neighbourhood_id = parseInt(neighbourhood_el.value);	       
 
     
-    feedback_el.innerText = "Performing search";
+    feedback("Performing search");
     
     var where = [];
 
@@ -333,6 +337,25 @@ async function do_search(){
 	draw_geometry(conn, "neighbourhoods", neighbourhood_id);	
     }
 
+    var categories = [];
+    
+    var count_filters = filters_el.childElementCount;
+    
+    if (count_filters){
+		
+	for (var i=0; i < count_filters; i++){
+	    
+	    var f = filters_el.children[i];
+	    var c = f.getAttribute("data-categories");
+	    
+	    if (! c){
+		continue;
+	    }
+	    
+	    categories.push("categories LIKE '%" + c + "%'");
+	}
+    }
+    
     var count_rendered = 0;
     
     var fetch_ids = async function(ids_list){
@@ -346,27 +369,8 @@ async function do_search(){
 	    "date_closed IS NULL",
 	];
 	
-	var count_filters = filters_el.childElementCount;
-	
-	if (count_filters){
-	    
-	    var categories = [];
-	    
-	    for (var i=0; i < count_filters; i++){
-		
-		var f = filters_el.children[i];
-		var c = f.getAttribute("data-categories");
-		
-		if (! c){
-		    continue;
-		}
-		
-		categories.push("categories LIKE '%" + c + "%'");
-	    }
-	    
-	    if (categories.length){
-		results_where.push("(" + categories.join(" OR ") + ")");
-	    }
+	if (categories.length){
+	    results_where.push("(" + categories.join(" OR ") + ")");
 	}
 	
 	var str_results_where = results_where.join(" AND ");
@@ -392,15 +396,26 @@ async function do_search(){
 	fetch_ids(ids_list);
     }
 
-    switch (ids_count){
-	case 1:
-	    feedback("Ready to search again.");
-	    break;
-	default:		       
-	    feedback(num_formatter.format(ids_count) + " results. Ready to search again.");
-	    break;
+    // START OF make me better
+    
+    var criteria = str_where;
+
+    if (categories.length){
+	criteria += " AND " + categories.join(" OR ");
     }
     
+    // END OF make me better    
+    
+    switch (ids_count){
+	case 1:
+	    criteria_el.innerText = "One result for '" + criteria + "'";
+	    break;
+	default:		       
+	    criteria_el.innerText = num_formatter.format(ids_count) + " results for '" + criteria + "'";
+	    break;
+    }
+
+    feedback("Ready to search");
 }
 
 async function draw_geometry(conn, pane, id) {
@@ -745,8 +760,7 @@ async function draw_search_results(search_results) {
 
 async function setup_pointinpolygon(){
 
-    console.log("SET UP PIP");
-    // Set up PIP handlers
+    feedback("Initializing point in polygon support");
 
     await conn.query("INSTALL spatial");    
     await conn.query("LOAD spatial");
