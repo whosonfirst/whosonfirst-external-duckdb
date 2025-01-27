@@ -451,12 +451,13 @@ async function draw_geometry(conn, pane, id) {
     }
 }
 
-async function draw_pointinpolygon_row(row) {
+async function draw_pointinpolygon_row(row, locality_id) {
 
     const props = {
 	'id': row.id,
 	'name': row.name,
 	'placetype': row.placetype,
+	'locality_id': locality_id,
     };
 
     const geom = JSON.parse(row.geometry);    
@@ -486,20 +487,24 @@ async function draw_pointinpolygon_row(row) {
 		const name = props.name;		
 		const pt = props.placetype;
 
-		console.log("CLICK", id, name, pt);
-		var el;
+		console.log("CLICK", props);
 		
 		switch(pt){
 		    case "neighbourhood":
-			el = document.getElementById("neighbourhood");
+
+			// Y U NO WORK???
+			console.log("LOC", locality_el, props.locality_id);		    
+			var locality_el = document.getElementById("locality");			
+			locality_el.value = props.locality_id;
+			
+			var neighbourhood_el = document.getElementById("neighbourhood");
+			neighbourhood_el.value = id;
+
 		    case "locality":
-			break;
+			var locality_el = document.getElementById("locality");
+			locality_el.value = id;			
 		    default:
 			break;
-		}
-
-		if (el){
-		    el.value = id;
 		}
 
 		return false;
@@ -780,7 +785,7 @@ async function setup_pointinpolygon(){
 
 	var locality_id = locality_row.id;
 	var locality_el = document.getElementById("locality");
-	locality_el.value = locality_id;
+	// locality_el.value = locality_id;
 	
 	fetch_neighbourhoods(conn, locality_id);
 
@@ -801,8 +806,8 @@ async function setup_pointinpolygon(){
 		console.log("PIP layer already drawn", row.id);
 		continue;
 	    }
-	    
-	    draw_pointinpolygon_row(row);
+
+	    draw_pointinpolygon_row(row, locality_id);
 	    has_neighbourhoods = true;
 	}
 
