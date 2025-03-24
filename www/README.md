@@ -1,12 +1,38 @@
 # whosonfirst-external-duckdb/www
 
+Example web application demonstrating area-based (San Francisco Bay Area in this case) venue search using Foursquare data that has been supplemented with Who's On First ancestries.
+
+## tl;dr - Serving the "www" folder
+
+You will need to "serve" the `www` folder from a local webserver. These are lots of different ways to do that. I like to use the `fileserver` tool which is part of the [aaronland/go-http-fileserver](https://github.com/aaronland/go-http-fileserver) package:
+
+```
+$> cd /usr/local/src/go-http-fileserver
+$> make cli
+
+$> ./bin/fileserver -root /usr/local/src/whosonfirst-external-duckdb/www/
+2025/01/14 17:41:37 Serving whosonfirst-external-duckdb/www/ and listening for requests on http://localhost:8080
+```
+
+Open your web browser to `http://localhost:8080` and you'll see something like this:
+
+![](../docs/images/whosonfirst-external-duckdb-pmtiles.png)
+
+![](../docs/images/whosonfirst-external-duckdb-daeho.png)
+
+### Serving the "www" folder locally versus on "the internet"
+
+This works either way. It is not, however, especially fast when served from a remote server on the internet. The DuckDB WASM file is 30MB alone and then there is the time to query and retrieve data from the (geo) parquet files over the wire. Once that is done it is still necessary to index that data in the in-memory full-text search index. It all works but it's not fast and if you're being metered and charged for outbound traffic you might not want to tell the entire internet about it.
+
 ## This is work in progress
 
 Documentation is incomplete.
 
 ## Setting up
 
-Note: The `sfba.parquet` and `sfba.pmtiles` that are created in the examples below are actually bundled with this respository. The documentation is provided so you can how you might create your own data sources to work with.
+Note: The `sfba.parquet` and `sfba.pmtiles` that are created in the examples below are actually bundled (using `git-lfs`) with this respository.
+
+This documentation is provided so you can how you might create your own data sources to work with.
 
 ### Parquet data
 
@@ -70,7 +96,8 @@ pgf:devanagari:version 1
 Create a properties lookup table (currently just for place names for localities and neighbourhoods) derived from the `sfba.parquet` table derived from Who's On First records hosted on `data.whosonfirst.org` using the `area-whosonfirst-properties` tool in the [whosonfirst/go-whosonfirst-external](https://github.com/whosonfirst/go-whosonfirst-external?tab=readme-ov-file#area-whosonfirst-properties) package. For example:
 
 ```
-$> area-whosonfirst-properties/main.go \
+$> cd /usr/local/go-whosonfirst-external
+$> ./bin/area-whosonfirst-properties \
 	-area-parquet sfba.parquet \
 	-whosonfirst-parquet whosonfirst.parquet
 ```	
@@ -96,21 +123,7 @@ D SELECT id, name, placetype, ST_AsText(ST_GeomFromGeoJSON(geometry)) FROM read_
 
 ## Serving the "www" folder
 
-You will need to "serve" the `www` folder from a local webserver. These are lots of different ways to do that. I like to use the `fileserver` tool which is part of the [aaronland/go-http-fileserver](https://github.com/aaronland/go-http-fileserver) package:
-
-```
-$> cd /usr/local/src/go-http-fileserver
-$> make cli
-
-$> ./bin/fileserver -root /usr/local/src/whosonfirst-external-duckdb/www/
-2025/01/14 17:41:37 Serving whosonfirst-external-duckdb/www/ and listening for requests on http://localhost:8080
-```
-
-Open your web browser to `http://localhost:8080` and you'll see something like this:
-
-![](../docs/images/whosonfirst-external-duckdb-pmtiles.png)
-
-![](../docs/images/whosonfirst-external-duckdb-daeho.png)
+See notes at the beginning of this document.
 
 ## See also
 
