@@ -32,18 +32,50 @@ Documentation is incomplete.
 
 Note: The `sfba.parquet` and `sfba.pmtiles` that are created in the examples below are actually bundled (using `git-lfs`) with this respository.
 
-This documentation is provided so you can how you might create your own data sources to work with.
+This documentation is provided so you can how you might create your own data sources to work with. You will need to ensure the following data sources are present:
+
+* The [Foursquare open data (venue) Parquet files](https://opensource.foursquare.com/os-places/)
+* The appropriate [whosonfirst-data/whosonfirst-external-foursquare-venue-*](https://github.com/whosonfirst-data/?q=-external&type=all&language=&sort=) data repository.
+
+Note that there are not `whosonfirst-external-foursquare-venue-*` repositories for all countries yet. You can use the tools in the [whosonfirst/go-whosonfirst-external](https://github.com/whosonfirst/go-whosonfirst-external] to produce your own data but the documentation for this process is incomplete as of this writing. (Basically you need to run the [assign-ancestors](https://github.com/whosonfirst/go-whosonfirst-external?tab=readme-ov-file#assign-ancestors) tool followed by the [sort-ancestors](https://github.com/whosonfirst/go-whosonfirst-external/tree/main/cmd/sort-ancestors) tool.)
+
+You will also need to make sure that you have cloned the following repositories which contain tools used to build custom data sources:
+
+* [whosonfirst/go-whosonfirst-external](https://github.com/whosonfirst/go-whosonfirst-external]
+* [whosonfirst/go-whosonfirst-spatial](https://github.com/whosonfirst/go-whosonfirst-spatial)
+* [protomaps/go-pmtiles](https://github.com/protomaps/go-pmtiles)
 
 ### Parquet data
 
-_To be written_
+First, compile Foursquare data for venues which are part of the Alameda ([102086959](https://spelunker.whosonfirst.org/id/102086959)), San Mateo ([102085387](https://spelunker.whosonfirst.org/id/102085387)) and San Francisco ([102087579](https://spelunker.whosonfirst.org/id/102087579)) counties. This data is compiled using the [Foursquare open data release](https://opensource.foursquare.com/os-places/) and the [whosonfirst-data/whosonfirst-external-foursquare-venue-us](https://github.com/whosonfirst-data/whosonfirst-external-foursquare-venue-us) repository and is written to a new file called `sfba.parquet`.
+
+This file is created using the `compile-area` tool which is part of the [whosonfirst/go-whosonfirst-external](https://github.com/whosonfirst/go-whosonfirst-external?tab=readme-ov-file#compile-area) package.
+
+```
+$> cd /usr/local/src/go-whosonfirst-external
+$> make cli
+
+$> ./bin/compile-area \
+	-external-source "/usr/local/data/foursquare/parquet/*.parquet" \
+	-external-id-key fsq_place_id \
+	-mode any \
+	-ancestor-id 102086959 \
+	-ancestor-id 102085387 \
+	-ancestor-id 102087579 \
+	-target sfba.parquet \
+	/usr/local/data/foursquare/whosonfirst/whosonfirst-external-foursquare-venue-us/data/85688637
+```
+
+_See the `whosonfirst-external-foursquare-venue-us/data/85688637` part? `85688637` is the Who's On First ID for [California](https://spelunker.whosonfirst.org/id/85688637) so we're only scanning for records parented by that state rather than all 50 states in the US._
 
 ### PMTiles
 
-First, derive the bounding box for San Francisco, Alameda and San Mateo counties using the `mbr` tool in the [whosonfirst/go-whosonfirst-spatial](https://github.com/whosonfirst/go-whosonfirst-spatial) package:
+Next, derive the bounding box for San Francisco, Alameda and San Mateo counties using the `mbr` tool in the [whosonfirst/go-whosonfirst-spatial](https://github.com/whosonfirst/go-whosonfirst-spatial) package:
 
 ```
 $> cd /usr/local/src/go-whosonfirst-spatial
+$> make cli
+
 $> ./bin/mbr -id 102087579 -id 102086959 -id 102085387
 -123.173825,37.053858,-121.469214,37.929824
 ```
@@ -97,6 +129,8 @@ Create a properties lookup table (currently just for place names for localities 
 
 ```
 $> cd /usr/local/go-whosonfirst-external
+$> make cli
+
 $> ./bin/area-whosonfirst-properties \
 	-area-parquet sfba.parquet \
 	-whosonfirst-parquet whosonfirst.parquet
